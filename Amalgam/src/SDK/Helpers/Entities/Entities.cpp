@@ -208,12 +208,7 @@ void CEntities::Store()
 
 	m_bIsSpectated = false;
 	m_pLocal = pLocalEntity->As<CTFPlayer>();
-	m_pLocalWeapon = nullptr;
-	if (const auto hWeapon = m_pLocal->m_hActiveWeapon(); hWeapon.IsValid())
-	{
-		if (auto pWeapon = hWeapon.Get()->As<CTFWeaponBase>(); pWeapon && pWeapon->m_hOwnerEntity().Get() == m_pLocal)
-			m_pLocalWeapon = pWeapon;
-	}
+	m_pLocalWeapon = m_pLocal->m_hActiveWeapon()->As<CTFWeaponBase>();
 
 	int iLocalTeam = m_pLocal->m_iTeamNum();
 
@@ -569,21 +564,7 @@ bool CEntities::IsSpellbook(uint32_t uHash)
 }
 
 CTFPlayer* CEntities::GetLocal() { return m_pLocal; }
-CTFWeaponBase* CEntities::GetWeapon()
-{
-	if (!m_pLocal)
-		return m_pLocalWeapon = nullptr;
-
-	const auto hWeapon = m_pLocal->m_hActiveWeapon();
-	if (!hWeapon.IsValid())
-		return m_pLocalWeapon = nullptr;
-
-	auto pWeapon = hWeapon.Get()->As<CTFWeaponBase>();
-	if (!pWeapon || pWeapon->m_hOwnerEntity().Get() != m_pLocal)
-		return m_pLocalWeapon = nullptr;
-
-	return m_pLocalWeapon = pWeapon;
-}
+CTFWeaponBase* CEntities::GetWeapon() { return m_pLocalWeapon; }
 CTFPlayerResource* CEntities::GetResource() { return m_pPlayerResource; }
 CBaseTeamObjectiveResource* CEntities::GetObjectiveResource( ) { return m_pObjectiveResource; }
 
