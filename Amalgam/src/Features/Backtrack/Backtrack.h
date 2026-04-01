@@ -25,6 +25,7 @@ struct TickRecord
 	std::vector<HitboxInfo_t> m_vHitboxInfos = {};
 	bool m_bOnShot = false;
 	bool m_bInvalid = false;
+	bool m_bInterpolated = false; // synthetic record generated between network updates
 	matrix3x4 m_aBones[MAXSTUDIOBONES];
 };
 
@@ -59,6 +60,15 @@ private:
 	};
 	std::optional<TickRecord> GetHitRecord(CBaseEntity* pEntity, CTFWeaponBase* pWeapon, CUserCmd* pCmd, CrosshairRecordInfo_t& InfoOut, const Vec3 vAngles, const Vec3 vPos);
 	void BacktrackToCrosshair(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
+
+	// RAII guard — prevents the SetupBones hook from serving cached data during our own controlled calls
+	struct BoneSetupScope
+	{
+		BoneSetupScope(CBacktrack& bt) : m_bt(bt) { m_bt.m_bSettingUpBones = true; }
+		~BoneSetupScope()                          { m_bt.m_bSettingUpBones = false; }
+		CBacktrack& m_bt;
+	};
+
 	bool m_bSettingUpBones = false;
 
 public:

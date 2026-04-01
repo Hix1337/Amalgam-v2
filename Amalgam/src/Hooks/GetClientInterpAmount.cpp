@@ -16,7 +16,15 @@ MAKE_HOOK(GetClientInterpAmount, S::GetClientInterpAmount(), float)
 	const auto dwUndesired2 = S::CNetGraphPanel_DrawTextFields_GetClientInterpAmount_Call2();
 
 	if (dwRetAddr != dwUndesired1 && dwRetAddr != dwUndesired2)
-		return 0.f;
+	{
+		// explicit lerp removal: caller wants zero latency snapping
+		if (Vars::Visuals::Removals::Lerp.Value)
+			return 0.f;
+
+		// interpolation removal active (resolver conflict workaround) but preserve
+		// visual smoothness at the server-negotiated baseline — prevents the teleporting
+		return G::Lerp;
+	}
 
 	return CALL_ORIGINAL();
 }

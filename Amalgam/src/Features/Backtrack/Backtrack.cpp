@@ -238,9 +238,11 @@ void CBacktrack::MakeRecords()
 
 
 		matrix3x4 aBones[MAXSTUDIOBONES];
-		m_bSettingUpBones = true;
-		bool bSetup = pPlayer->SetupBones(aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, pPlayer->m_flSimulationTime());
-		m_bSettingUpBones = false;
+		bool bSetup;
+		{
+			BoneSetupScope _guard(*this);
+			bSetup = pPlayer->SetupBones(aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, pPlayer->m_flSimulationTime());
+		}
 		if (!bSetup)
 			continue;
 
@@ -309,6 +311,81 @@ void CBacktrack::MakeRecords()
 
 		H::Entities.SetLagCompensation(pPlayer->entindex(), bLagComp);
 		m_mDidShoot[pPlayer->entindex()] = false;
+
+		// synthetic interpolated records (seo64-style gap filling)
+		// when the server skips multiple ticks between updates, we generate intermediate
+		// records so lag compensation has finer resolution and visuals don't pop
+		if (pLastRecord && !bLagComp && !pLastRecord->m_bInvalid)
+		{
+			const int nTickDelta = TIME_TO_TICKS(tCurRecord.m_flSimTime - pLastRecord->m_flSimTime);
+			if (nTickDelta >= 2)
+			{
+				// capture before deque insertions can shift pointers
+				const Vec3 vCurOrigin  = tCurRecord.m_vOrigin;
+				const Vec3 vLastOrigin = pLastRecord->m_vOrigin;
+				const Vec3 vCurMins    = tCurRecord.m_vMins;
+				const Vec3 vLastMins   = pLastRecord->m_vMins;
+				const Vec3 vCurMaxs    = tCurRecord.m_vMaxs;
+				const Vec3 vLastMaxs   = pLastRecord->m_vMaxs;
+				const float flCurTime  = tCurRecord.m_flSimTime;
+
+				for (int n = 1; n < nTickDelta; n++)
+				{
+					const float frac = static_cast<float>(n) / static_cast<float>(nTickDelta);
+
+					TickRecord tInterp = {};
+					tInterp.m_bInterpolated = true;
+					tInterp.m_flSimTime     = flCurTime - TICKS_TO_TIME(n);
+					tInterp.m_vOrigin       = vCurOrigin  + (vLastOrigin - vCurOrigin)  * frac;
+					tInterp.m_vMins         = vCurMins    + (vLastMins   - vCurMins)    * frac;
+					tInterp.m_vMaxs         = vCurMaxs    + (vLastMaxs   - vCurMaxs)    * frac;
+
+					// SetupBones at the interpolated world position so hitboxes are accurate
+					const Vec3 vSavedOrigin  = pPlayer->GetAbsOrigin();
+					const float flSavedCurtime   = I::GlobalVars->curtime;
+					const float flSavedFrametime = I::GlobalVars->frametime;
+
+					pPlayer->SetAbsOrigin(tInterp.m_vOrigin);
+
+					// set curtime to the intermediate tick so internal animation blending
+					// references the correct point in time rather than the render frame
+					I::GlobalVars->curtime   = tInterp.m_flSimTime;
+					I::GlobalVars->frametime = TICK_INTERVAL;
+
+					bool bInterpBonesOk;
+					{
+						BoneSetupScope _guard(*this);
+						pPlayer->InvalidateBoneCache();
+						const int nSavedEffects = pPlayer->m_fEffects();
+						pPlayer->m_fEffects() |= 8; // EF_NOINTERP — no engine blending at this exact state
+						bInterpBonesOk = pPlayer->SetupBones(tInterp.m_aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, tInterp.m_flSimTime);
+						pPlayer->m_fEffects() = nSavedEffects;
+					}
+
+					I::GlobalVars->curtime   = flSavedCurtime;
+					I::GlobalVars->frametime = flSavedFrametime;
+					pPlayer->SetAbsOrigin(vSavedOrigin);
+
+					if (bInterpBonesOk)
+					{
+						for (int nHitbox = 0; nHitbox < pPlayer->GetNumOfHitboxes(); nHitbox++)
+						{
+							auto pBox = pSet->pHitbox(nHitbox);
+							if (!pBox) continue;
+
+							const Vec3 vMin = pBox->bbmin, vMax = pBox->bbmax;
+							const int iBone = pBox->bone;
+							Vec3 vCenter{};
+							Math::VectorTransform((vMin + vMax) / 2, tInterp.m_aBones[iBone], vCenter);
+							tInterp.m_vHitboxInfos.push_back({ iBone, nHitbox, vCenter, vMin, vMax });
+						}
+					}
+
+					// insert between the current real record (front) and the previous real record
+					vRecords.insert(vRecords.begin() + 1, tInterp);
+				}
+			}
+		}
 	}
 }
 
