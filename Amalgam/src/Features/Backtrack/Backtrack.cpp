@@ -1,4 +1,5 @@
 #include "Backtrack.h"
+#include "LagRecordHelper.h"
 
 #include "../PacketManip/FakeLag/FakeLag.h"
 #include "../Ticks/Ticks.h"
@@ -238,11 +239,9 @@ void CBacktrack::MakeRecords()
 
 
 		matrix3x4 aBones[MAXSTUDIOBONES];
-		bool bSetup;
-		{
-			BoneSetupScope _guard(*this);
-			bSetup = pPlayer->SetupBones(aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, pPlayer->m_flSimulationTime());
-		}
+		F::LagRecordHelper.AllowBoneSetup(true);
+		bool bSetup = pPlayer->SetupBones(aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, pPlayer->m_flSimulationTime());
+		F::LagRecordHelper.AllowBoneSetup(false);
 		if (!bSetup)
 			continue;
 
@@ -271,6 +270,7 @@ void CBacktrack::MakeRecords()
 		TickRecord tCurRecord = {
 			pPlayer->m_flSimulationTime(),
 			pPlayer->m_vecOrigin(),
+			pPlayer->GetAbsAngles(),
 			pPlayer->m_vecMins(),
 			pPlayer->m_vecMaxs(),
 			vHitboxInfos,
@@ -323,6 +323,8 @@ void CBacktrack::MakeRecords()
 				// capture before deque insertions can shift pointers
 				const Vec3 vCurOrigin  = tCurRecord.m_vOrigin;
 				const Vec3 vLastOrigin = pLastRecord->m_vOrigin;
+				const Vec3 vCurAngles  = tCurRecord.m_vAngles;
+				const Vec3 vLastAngles = pLastRecord->m_vAngles;
 				const Vec3 vCurMins    = tCurRecord.m_vMins;
 				const Vec3 vLastMins   = pLastRecord->m_vMins;
 				const Vec3 vCurMaxs    = tCurRecord.m_vMaxs;
@@ -335,36 +337,36 @@ void CBacktrack::MakeRecords()
 
 					TickRecord tInterp = {};
 					tInterp.m_bInterpolated = true;
-					tInterp.m_flSimTime     = flCurTime - TICKS_TO_TIME(n);
-					tInterp.m_vOrigin       = vCurOrigin  + (vLastOrigin - vCurOrigin)  * frac;
-					tInterp.m_vMins         = vCurMins    + (vLastMins   - vCurMins)    * frac;
-					tInterp.m_vMaxs         = vCurMaxs    + (vLastMaxs   - vCurMaxs)    * frac;
+					tInterp.m_flSimTime = flCurTime - TICKS_TO_TIME(n);
+					tInterp.m_vOrigin   = vCurOrigin  + (vLastOrigin  - vCurOrigin)  * frac;
+					tInterp.m_vAngles   = vCurAngles  + (vLastAngles  - vCurAngles)  * frac;
+					tInterp.m_vMins     = vCurMins    + (vLastMins    - vCurMins)    * frac;
+					tInterp.m_vMaxs     = vCurMaxs    + (vLastMaxs    - vCurMaxs)    * frac;
 
-					// SetupBones at the interpolated world position so hitboxes are accurate
+					// SetupBones at the interpolated world position — seo64 pattern:
+					// save state, move player to intermediate pos, open gate, setup, restore
 					const Vec3 vSavedOrigin  = pPlayer->GetAbsOrigin();
+					const Vec3 vSavedAngles  = pPlayer->GetAbsAngles();
 					const float flSavedCurtime   = I::GlobalVars->curtime;
 					const float flSavedFrametime = I::GlobalVars->frametime;
 
 					pPlayer->SetAbsOrigin(tInterp.m_vOrigin);
-
-					// set curtime to the intermediate tick so internal animation blending
-					// references the correct point in time rather than the render frame
+					pPlayer->SetAbsAngles(tInterp.m_vAngles);
 					I::GlobalVars->curtime   = tInterp.m_flSimTime;
 					I::GlobalVars->frametime = TICK_INTERVAL;
 
-					bool bInterpBonesOk;
-					{
-						BoneSetupScope _guard(*this);
-						pPlayer->InvalidateBoneCache();
-						const int nSavedEffects = pPlayer->m_fEffects();
-						pPlayer->m_fEffects() |= 8; // EF_NOINTERP — no engine blending at this exact state
-						bInterpBonesOk = pPlayer->SetupBones(tInterp.m_aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, tInterp.m_flSimTime);
-						pPlayer->m_fEffects() = nSavedEffects;
-					}
+					F::LagRecordHelper.AllowBoneSetup(true);
+					pPlayer->InvalidateBoneCache();
+					const int nSavedEffects = pPlayer->m_fEffects();
+					pPlayer->m_fEffects() |= 8; // EF_NOINTERP
+					const bool bInterpBonesOk = pPlayer->SetupBones(tInterp.m_aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, tInterp.m_flSimTime);
+					pPlayer->m_fEffects() = nSavedEffects;
+					F::LagRecordHelper.AllowBoneSetup(false);
 
 					I::GlobalVars->curtime   = flSavedCurtime;
 					I::GlobalVars->frametime = flSavedFrametime;
 					pPlayer->SetAbsOrigin(vSavedOrigin);
+					pPlayer->SetAbsAngles(vSavedAngles);
 
 					if (bInterpBonesOk)
 					{

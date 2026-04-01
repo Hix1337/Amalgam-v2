@@ -1,6 +1,6 @@
 #include "../SDK/SDK.h"
 
-#include "../Features/Backtrack/Backtrack.h"
+#include "../Features/Backtrack/LagRecordHelper.h"
 
 MAKE_SIGNATURE(CBaseAnimating_SetupBones, "client.dll", "48 8B C4 44 89 40 ? 48 89 50 ? 55 53", 0x0);
 
@@ -9,7 +9,8 @@ MAKE_HOOK(CBaseAnimating_SetupBones, S::CBaseAnimating_SetupBones(), bool,
 {
 	DEBUG_RETURN(CBaseAnimating_SetupBones, rcx, pBoneToWorldOut, nMaxBones, boneMask, currentTime);
 
-	if (!G::Unload && !Vars::Misc::Game::SetupBonesOptimization.Value || F::Backtrack.IsSettingUpBones())
+	// pass through when unloading, optimization disabled, or LagRecordHelper has opened the gate
+	if (G::Unload || !Vars::Misc::Game::SetupBonesOptimization.Value || F::LagRecordHelper.IsBoneSetupAllowed())
 		return CALL_ORIGINAL(rcx, pBoneToWorldOut, nMaxBones, boneMask, currentTime);
 
 	auto pAnimating = reinterpret_cast<CBaseEntity*>(uintptr_t(rcx) - 8);
@@ -21,6 +22,7 @@ MAKE_HOOK(CBaseAnimating_SetupBones, S::CBaseAnimating_SetupBones(), bool,
 	if (!pEntity->IsPlayer() || pEntity->entindex() == I::EngineClient->GetLocalPlayer())
 		return CALL_ORIGINAL(rcx, pBoneToWorldOut, nMaxBones, boneMask, currentTime);
 
+	// gate is closed — serve cached bones, no recalculation
 	if (pBoneToWorldOut)
 	{
 		auto& aBones = pEntity->As<CBaseAnimating>()->m_CachedBoneData();

@@ -20,6 +20,7 @@ struct TickRecord
 {
 	float m_flSimTime = 0.f;
 	Vec3 m_vOrigin = {};
+	Vec3 m_vAngles = {};
 	Vec3 m_vMins = {};
 	Vec3 m_vMaxs = {};
 	std::vector<HitboxInfo_t> m_vHitboxInfos = {};
@@ -61,16 +62,6 @@ private:
 	std::optional<TickRecord> GetHitRecord(CBaseEntity* pEntity, CTFWeaponBase* pWeapon, CUserCmd* pCmd, CrosshairRecordInfo_t& InfoOut, const Vec3 vAngles, const Vec3 vPos);
 	void BacktrackToCrosshair(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
 
-	// RAII guard — prevents the SetupBones hook from serving cached data during our own controlled calls
-	struct BoneSetupScope
-	{
-		BoneSetupScope(CBacktrack& bt) : m_bt(bt) { m_bt.m_bSettingUpBones = true; }
-		~BoneSetupScope()                          { m_bt.m_bSettingUpBones = false; }
-		CBacktrack& m_bt;
-	};
-
-	bool m_bSettingUpBones = false;
-
 public:
 	void Store();
 	void CreateMove(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd);
@@ -96,9 +87,6 @@ public:
 	void ReportShot(int iIndex);
 	void AdjustPing(CNetChannel* netChannel);
 	void RestorePing(CNetChannel* netChannel);
-
-
-	bool IsSettingUpBones() { return m_bSettingUpBones; }
 
 	int m_iTickCount = 0;
 	float m_flSentInterp = -1.f;
