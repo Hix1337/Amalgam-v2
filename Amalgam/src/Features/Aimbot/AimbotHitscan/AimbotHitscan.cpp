@@ -1,6 +1,7 @@
 #include "AimbotHitscan.h"
 
 #include "../Aimbot.h"
+#include "../../Backtrack/LagRecordHelper.h"
 #include "../../Resolver/Resolver.h"
 #include "../../Ticks/Ticks.h"
 #include "../../Visuals/Visuals.h"
@@ -257,7 +258,10 @@ int CAimbotHitscan::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* 
 		if (!pSet) return false;
 
 		matrix3x4 aBones[MAXSTUDIOBONES];
-		if (!tTarget.m_pEntity->SetupBones(aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, tTarget.m_pEntity->m_flSimulationTime()))
+		F::LagRecordHelper.AllowBoneSetup(true);
+		bool bHitscanSetup = tTarget.m_pEntity->SetupBones(aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, tTarget.m_pEntity->m_flSimulationTime());
+		F::LagRecordHelper.AllowBoneSetup(false);
+		if (!bHitscanSetup)
 			return false;
 
 		std::vector<HitboxInfo_t> vHitboxInfos{};
@@ -272,7 +276,7 @@ int CAimbotHitscan::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* 
 			Math::VectorTransform((iMin + iMax) / 2, aBones[iBone], vCenter);
 			vHitboxInfos.emplace_back(iBone, nHitbox, vCenter, iMin, iMax);
 		}
-		F::Backtrack.m_tRecord = { tTarget.m_pEntity->m_flSimulationTime(), tTarget.m_pEntity->m_vecOrigin(), Vec3(), Vec3(), vHitboxInfos };
+		F::Backtrack.m_tRecord = { tTarget.m_pEntity->m_flSimulationTime(), tTarget.m_pEntity->m_vecOrigin(), tTarget.m_pEntity->GetAbsAngles(), Vec3(), Vec3(), vHitboxInfos };
 		memcpy(F::Backtrack.m_tRecord.m_aBones, aBones, sizeof(F::Backtrack.m_tRecord.m_aBones));
 		vRecords = { &F::Backtrack.m_tRecord };
 	}

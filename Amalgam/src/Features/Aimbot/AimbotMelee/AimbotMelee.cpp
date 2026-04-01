@@ -1,6 +1,7 @@
 #include "AimbotMelee.h"
 
 #include "../Aimbot.h"
+#include "../../Backtrack/LagRecordHelper.h"
 #include "../../Simulation/MovementSimulation/MovementSimulation.h"
 #include "../../EnginePrediction/EnginePrediction.h"
 #include "../../Ticks/Ticks.h"
@@ -398,8 +399,11 @@ int CAimbotMelee::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* pW
 	}
 	else
 	{
-		F::Backtrack.m_tRecord = { tTarget.m_pEntity->m_flSimulationTime(), tTarget.m_pEntity->m_vecOrigin(), tTarget.m_pEntity->m_vecMins(), tTarget.m_pEntity->m_vecMaxs() };
-		if (!tTarget.m_pEntity->SetupBones(F::Backtrack.m_tRecord.m_aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, tTarget.m_pEntity->m_flSimulationTime()))
+		F::Backtrack.m_tRecord = { tTarget.m_pEntity->m_flSimulationTime(), tTarget.m_pEntity->m_vecOrigin(), tTarget.m_pEntity->GetAbsAngles(), tTarget.m_pEntity->m_vecMins(), tTarget.m_pEntity->m_vecMaxs() };
+		F::LagRecordHelper.AllowBoneSetup(true);
+		bool bMeleeSetup = tTarget.m_pEntity->SetupBones(F::Backtrack.m_tRecord.m_aBones, MAXSTUDIOBONES, BONE_USED_BY_ANYTHING, tTarget.m_pEntity->m_flSimulationTime());
+		F::LagRecordHelper.AllowBoneSetup(false);
+		if (!bMeleeSetup)
 			return false;
 
 		vRecords = { &F::Backtrack.m_tRecord };
