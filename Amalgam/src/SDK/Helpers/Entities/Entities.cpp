@@ -165,6 +165,7 @@ void CEntities::UpdatePlayerAnimations(int nLocalIndex)
 		if (!pPlayer->IsAlive()) continue;
 		if (pPlayer->entindex() == nLocalIndex && !bPlayingDemo) // local player managed in CreateMove
 			continue;
+		if (pPlayer->InCond(TF_COND_TAUNTING)) continue;
 
 		bool bResolved = F::Resolver.GetAngles(pPlayer);
 
