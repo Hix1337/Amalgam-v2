@@ -370,6 +370,8 @@ int CAimbotHitscan::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* 
 			if (!aBones)
 				continue;
 
+			F::LagRecordHelper.Set(tTarget.m_pEntity->As<CTFPlayer>(), pRecord);
+
 			std::vector<std::tuple<HitboxInfo_t, int, int>> vHitboxes;
 			for (int i = 0; i < pRecord->m_vHitboxInfos.size(); i++)
 			{
@@ -474,6 +476,7 @@ int CAimbotHitscan::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* 
 							tTarget.m_vPos = vOrigin;
 							tTarget.m_nAimedHitbox = nHitbox;
 							tTarget.m_bBacktrack = true;
+							F::LagRecordHelper.Reset();
 							return true;
 						}
 						else if (bChanged && SDK::VisPos(pLocal, tTarget.m_pEntity, m_vEyePos, vOrigin))
@@ -558,6 +561,7 @@ int CAimbotHitscan::CanHit(Target_t& tTarget, CTFPlayer* pLocal, CTFWeaponBase* 
 		}
 
 nextTick:
+		F::LagRecordHelper.Reset();
 		continue;
 	}
 
