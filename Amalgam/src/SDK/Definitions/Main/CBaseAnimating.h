@@ -47,7 +47,7 @@ public:
 	SIGNATURE_ARGS(FrameAdvance, float, CBaseAnimating, (float flInterval), this, flInterval);
 	SIGNATURE_ARGS(GetBonePosition, float, CBaseAnimating, (int iBone, Vector& origin, QAngle& angles), this, iBone, std::ref(origin), std::ref(angles));
 	SIGNATURE(SequenceDuration, float, CBaseAnimating, this);
-	SIGNATURE_ARGS(SetupBones_AttachmentHelper, bool, CBaseAnimating_SetupBones_AttachmentHelper, (CStudioHdr* hdr), this, hdr);
+	SIGNATURE_ARGS(SetupBones_AttachmentHelper, bool, CBaseAnimating, (CStudioHdr* hdr), this, hdr);
 	inline float SequenceDuration(int iSequence)
 	{
 		int iOriginalSequence = m_nSequence();
