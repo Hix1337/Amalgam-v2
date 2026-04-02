@@ -1144,6 +1144,7 @@
     <ClCompile Include="src\Features\Output\Output.cpp" />
     <ClCompile Include="src\Features\Misc\AutoQueue\AutoQueue.cpp" />
     <ClCompile Include="src\Features\Backtrack\Backtrack.cpp" />
+    <ClCompile Include="src\Features\Backtrack\LagRecordHelper.cpp" />
     <ClCompile Include="src\Features\Visuals\CameraWindow\CameraWindow.cpp" />
     <ClCompile Include="src\Features\CheaterDetection\CheaterDetection.cpp" />
     <ClCompile Include="src\Features\Players\SteamProfileCache.cpp" />
