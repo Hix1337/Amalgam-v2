@@ -167,13 +167,14 @@ void CEntities::UpdatePlayerAnimations(int nLocalIndex)
 			continue;
 
 		bool bResolved = F::Resolver.GetAngles(pPlayer);
-		if (!bDisableinterpolation && !bResolved)
-			continue;
 
-		int iDeltaTicks = TIME_TO_TICKS(GetDeltaTime(pPlayer->entindex()));
-		if (iDeltaTicks <= 0) continue;
+		// seo64 onNetworkUpdate pattern: step ALL remote players, not just resolved/interp-removed.
+		// clamp [1,24] to survive lag spikes without running 100 iterations.
+		int iDeltaTicks = std::clamp(TIME_TO_TICKS(GetDeltaTime(pPlayer->entindex())), 1, 24);
 
+		float flOldCurtime   = I::GlobalVars->curtime;
 		float flOldFrameTime = I::GlobalVars->frametime;
+		I::GlobalVars->curtime   = pPlayer->m_flOldSimulationTime();
 		I::GlobalVars->frametime = I::Prediction->m_bEnginePaused ? 0.f : TICK_INTERVAL;
 
 		G::UpdatingAnims = true;
@@ -193,8 +194,11 @@ void CEntities::UpdatePlayerAnimations(int nLocalIndex)
 			}
 			else
 				pPlayer->UpdateClientSideAnimation();
+
+			I::GlobalVars->curtime += TICK_INTERVAL;
 		}
 		G::UpdatingAnims = false;
+		I::GlobalVars->curtime   = flOldCurtime;
 		I::GlobalVars->frametime = flOldFrameTime;
 	}
 }

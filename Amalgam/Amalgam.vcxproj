@@ -1189,6 +1189,7 @@
     <ClCompile Include="src\Hooks\CBaseAnimating_SetSequence.cpp" />
     <ClCompile Include="src\Hooks\CBaseAnimating_SetupBones.cpp" />
     <ClCompile Include="src\Hooks\CBaseAnimating_UpdateClientSideAnimation.cpp" />
+    <ClCompile Include="src\Hooks\CSequenceTransitioner_CheckForSequenceChange.cpp" />
     <ClCompile Include="src\Hooks\CBaseEntity_BaseInterpolatePart1.cpp" />
     <ClCompile Include="src\Hooks\CBaseEntity_EstimateAbsVelocity.cpp" />
     <ClCompile Include="src\Hooks\CBoneFollower_TestCollision.cpp" />

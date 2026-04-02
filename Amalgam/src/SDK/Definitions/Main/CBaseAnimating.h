@@ -5,6 +5,7 @@
 MAKE_SIGNATURE(CBaseAnimating_FrameAdvance, "client.dll", "48 89 5C 24 ? 48 89 6C 24 ? 57 48 81 EC ? ? ? ? 44 0F 29 54 24", 0x0);
 MAKE_SIGNATURE(CBaseAnimating_GetBonePosition, "client.dll", "48 89 5C 24 ? 48 89 6C 24 ? 48 89 74 24 ? 57 48 83 EC ? 8B DA 49 8B F1", 0x0);
 MAKE_SIGNATURE(CBaseAnimating_SequenceDuration, "client.dll", "48 89 5C 24 ? 57 48 83 EC ? 80 B9 ? ? ? ? ? 48 8B D9 8B B9", 0x0);
+MAKE_SIGNATURE(CBaseAnimating_SetupBones_AttachmentHelper, "client.dll", "40 55 56 48 81 EC B8 00 00 00 48 8B EA", 0x0);
 
 class CBaseAnimating : public CBaseEntity
 {
@@ -46,6 +47,7 @@ public:
 	SIGNATURE_ARGS(FrameAdvance, float, CBaseAnimating, (float flInterval), this, flInterval);
 	SIGNATURE_ARGS(GetBonePosition, float, CBaseAnimating, (int iBone, Vector& origin, QAngle& angles), this, iBone, std::ref(origin), std::ref(angles));
 	SIGNATURE(SequenceDuration, float, CBaseAnimating, this);
+	SIGNATURE_ARGS(SetupBones_AttachmentHelper, bool, CBaseAnimating_SetupBones_AttachmentHelper, (CStudioHdr* hdr), this, hdr);
 	inline float SequenceDuration(int iSequence)
 	{
 		int iOriginalSequence = m_nSequence();
