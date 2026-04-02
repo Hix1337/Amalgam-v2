@@ -46,8 +46,8 @@ MAKE_HOOK(CBaseAnimating_UpdateClientSideAnimation, S::CBaseAnimating_UpdateClie
 	auto pHDR = pPlayer->GetModelPtr();
 	if (!pHDR) return;
 
-	auto it = F::Backtrack.m_mRecords.find(pPlayer);
-	if (it == F::Backtrack.m_mRecords.end() || it->second.empty())
+	std::vector<TickRecord*> vRecords;
+	if (!F::Backtrack.GetRecords(pPlayer, vRecords) || vRecords.empty())
 	{
 		// no records yet — fall back to a gated SetupBones so bones aren't garbage
 		F::LagRecordHelper.AllowBoneSetup(true);
@@ -57,8 +57,8 @@ MAKE_HOOK(CBaseAnimating_UpdateClientSideAnimation, S::CBaseAnimating_UpdateClie
 		return;
 	}
 
-	const TickRecord& tRecord = it->second.front();
-	if (tRecord.m_bInvalid)
+	const TickRecord* pRecord = vRecords.front();
+	if (pRecord->m_bInvalid)
 	{
 		F::LagRecordHelper.AllowBoneSetup(true);
 		pPlayer->InvalidateBoneCache();
@@ -68,12 +68,12 @@ MAKE_HOOK(CBaseAnimating_UpdateClientSideAnimation, S::CBaseAnimating_UpdateClie
 	}
 
 	auto& cachedBones = pPlayer->As<CBaseAnimating>()->m_CachedBoneData();
-	const Vec3 vRecordOrigin = tRecord.m_vOrigin;
+	const Vec3 vRecordOrigin = pRecord->m_vOrigin;
 	const Vec3 vRenderOrigin = pPlayer->GetRenderOrigin();
 
 	for (int i = 0; i < cachedBones.Count(); i++)
 	{
-		const Vec3 vBonePos = { tRecord.m_aBones[i][0][3], tRecord.m_aBones[i][1][3], tRecord.m_aBones[i][2][3] };
+		const Vec3 vBonePos = { pRecord->m_aBones[i][0][3], pRecord->m_aBones[i][1][3], pRecord->m_aBones[i][2][3] };
 		const Vec3 vAdjusted = vRenderOrigin + (vBonePos - vRecordOrigin);
 		cachedBones[i][0][3] = vAdjusted.x;
 		cachedBones[i][1][3] = vAdjusted.y;
