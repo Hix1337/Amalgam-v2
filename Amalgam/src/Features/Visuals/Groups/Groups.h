@@ -20,6 +20,7 @@ struct Group_t
 
 	int m_iTargets = 0b0;
 	int m_iConditions = 0b0;
+	int m_iTagFilter = -1; // player list tag index, -1 = off. renders ONLY players with this tag (ignores priority value)
 	int m_iPlayers = 0b0;
 	int m_iBuildings = 0b0;
 	int m_iProjectiles = 0b0;
