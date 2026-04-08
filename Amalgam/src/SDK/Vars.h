@@ -934,6 +934,9 @@ I dont think this is a good idea to disable simulations completely:
 			CVar(TauntControl, "Taunt control", false);
 			CVar(KartControl, "Kart control", false);
 			CVar(AutoDisguise, "Auto disguise", false);
+			CVarEnum(AutoDisguiseClasses, "Auto disguise classes", 0b111111111, DROPDOWN_MULTI, nullptr,
+				VA_LIST("Scout", "Sniper", "Soldier", "Demoman", "Medic", "Heavy", "Pyro", "Spy", "Engineer"),
+				Scout = 1 << 0, Sniper = 1 << 1, Soldier = 1 << 2, Demoman = 1 << 3, Medic = 1 << 4, Heavy = 1 << 5, Pyro = 1 << 6, Spy = 1 << 7, Engineer = 1 << 8);
 			CVar(AutoTaunt, "Auto taunt on kill", false);
 			CVar(AutoTauntChance, "Auto taunt chance", 100, SLIDER_CLAMP, 0, 100, 1, "%i%%");
 			CVar(AchievementSpam, "Achievement spam", false);
