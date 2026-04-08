@@ -697,7 +697,20 @@ void CMisc::AutoDisguise(CTFPlayer* pLocal)
 	if (!tDisguiseTimer.Run(0.75f))
 		return;
 
-	const int iClass = SDK::RandomInt(1, 9);
+	const int iClassMask = Vars::Misc::Automation::AutoDisguiseClasses.Value;
+	if (!iClassMask)
+		return;
+
+	// TF_CLASS enum order: Scout=1, Sniper=2, Soldier=3, Demoman=4, Medic=5, Heavy=6, Pyro=7, Spy=8, Engineer=9
+	// Bit order matches: bit 0=Scout(1), bit 1=Sniper(2), ... bit 8=Engineer(9)
+	std::vector<int> vClasses;
+	for (int i = 0; i < 9; i++)
+	{
+		if (iClassMask & (1 << i))
+			vClasses.push_back(i + 1);
+	}
+
+	const int iClass = vClasses[SDK::RandomInt(0, static_cast<int>(vClasses.size()) - 1)];
 	I::EngineClient->ClientCmd_Unrestricted(std::format("disguise {} -1", iClass).c_str());
 }
 
