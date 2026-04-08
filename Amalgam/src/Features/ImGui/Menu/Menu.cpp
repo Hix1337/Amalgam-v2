@@ -717,6 +717,16 @@ void CMenu::MenuVisuals(int iTab)
 				if (Section("Conditions"))
 				{
 					FDropdown("Conditions", &tGroup.m_iConditions, { "Enemy", "Team", "BLU", "RED", "##Divider", "Local", "Friends", "Party", "Priority", "Target", "##Divider", "Dormant" }, {}, FDropdownEnum::Multi);
+					{
+						std::vector<const char*> vTagLabels = { "None" };
+						std::vector<int> vTagValues = { -1 };
+						for (size_t t = 0; t < F::PlayerUtils.m_vTags.size(); t++)
+						{
+							vTagLabels.push_back(F::PlayerUtils.m_vTags[t].m_sName.c_str());
+							vTagValues.push_back(int(t));
+						}
+						FDropdown("Tag filter", &tGroup.m_iTagFilter, vTagLabels, vTagValues);
+					}
 					Divider(H::Draw.Scale(), H::Draw.Scale(8), -H::Draw.Scale());
 					PushTransparent(!(tGroup.m_iTargets & TargetsEnum::Players));
 					{
