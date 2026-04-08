@@ -495,6 +495,7 @@ bool CConfigs::SaveConfig(const std::string& sConfigName, bool bNotify)
 				SaveJson(tChild, "TagsOverrideColor", tGroup.m_bTagsOverrideColor);
 				SaveJson(tChild, "Targets", tGroup.m_iTargets);
 				SaveJson(tChild, "Conditions", tGroup.m_iConditions);
+				SaveJson(tChild, "TagFilter", tGroup.m_iTagFilter);
 				SaveJson(tChild, "Players", tGroup.m_iPlayers);
 				SaveJson(tChild, "Buildings", tGroup.m_iBuildings);
 				SaveJson(tChild, "Projectiles", tGroup.m_iProjectiles);
@@ -614,6 +615,7 @@ bool CConfigs::LoadConfig(const std::string& sConfigName, bool bNotify)
 				LoadJson(tChild, "TagsOverrideColor", tGroup.m_bTagsOverrideColor);
 				LoadJson(tChild, "Targets", tGroup.m_iTargets);
 				LoadJson(tChild, "Conditions", tGroup.m_iConditions);
+				LoadJson(tChild, "TagFilter", tGroup.m_iTagFilter);
 				LoadJson(tChild, "Players", tGroup.m_iPlayers);
 				LoadJson(tChild, "Buildings", tGroup.m_iBuildings);
 				LoadJson(tChild, "Projectiles", tGroup.m_iProjectiles);
@@ -735,6 +737,7 @@ bool CConfigs::SaveVisual(const std::string& sConfigName, bool bNotify)
 				SaveJson(tChild, "TagsOverrideColor", tGroup.m_bTagsOverrideColor);
 				SaveJson(tChild, "Targets", tGroup.m_iTargets);
 				SaveJson(tChild, "Conditions", tGroup.m_iConditions);
+				SaveJson(tChild, "TagFilter", tGroup.m_iTagFilter);
 				SaveJson(tChild, "Players", tGroup.m_iPlayers);
 				SaveJson(tChild, "Buildings", tGroup.m_iBuildings);
 				SaveJson(tChild, "Projectiles", tGroup.m_iProjectiles);
@@ -818,6 +821,7 @@ bool CConfigs::LoadVisual(const std::string& sConfigName, bool bNotify)
 				LoadJson(tChild, "TagsOverrideColor", tGroup.m_bTagsOverrideColor);
 				LoadJson(tChild, "Targets", tGroup.m_iTargets);
 				LoadJson(tChild, "Conditions", tGroup.m_iConditions);
+				LoadJson(tChild, "TagFilter", tGroup.m_iTagFilter);
 				LoadJson(tChild, "Players", tGroup.m_iPlayers);
 				LoadJson(tChild, "Buildings", tGroup.m_iBuildings);
 				LoadJson(tChild, "Projectiles", tGroup.m_iProjectiles);
