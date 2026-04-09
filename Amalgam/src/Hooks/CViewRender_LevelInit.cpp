@@ -13,6 +13,7 @@
 #include "../Features/NavBot/NavEngine/NavEngine.h"
 #include "../Features/Killstreak/Killstreak.h"
 #include "../Features/FollowBot/FollowBot.h"
+#include "../Features/Prediction/CompressionHandler.h"
 
 MAKE_HOOK(CViewRender_LevelInit, U::Memory.GetVirtual(I::ViewRender, 1), void,
 	void* rcx)
@@ -36,6 +37,7 @@ MAKE_HOOK(CViewRender_LevelInit, U::Memory.GetVirtual(I::ViewRender, 1), void,
 	F::NavBotCore.Reset();
 	F::BotUtils.Reset();
 	F::FollowBot.Reset();
+	F::CompressionHandler.OnLevelInit();
 
 	CALL_ORIGINAL(rcx);
 }

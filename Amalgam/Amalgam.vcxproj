@@ -1153,6 +1153,7 @@
     <ClCompile Include="src\Features\Configs\Configs.cpp" />
     <ClCompile Include="src\Features\CritHack\CritHack.cpp" />
     <ClCompile Include="src\Features\EnginePrediction\EnginePrediction.cpp" />
+    <ClCompile Include="src\Features\Prediction\CompressionHandler.cpp" />
     <ClCompile Include="src\Features\ImGui\Render.cpp" />
     <ClCompile Include="src\Features\ImGui\Menu\Menu.cpp" />
     <ClCompile Include="src\Features\Misc\AutoVote\AutoVote.cpp" />
@@ -1193,6 +1194,14 @@
     <ClCompile Include="src\Hooks\CSequenceTransitioner_CheckForSequenceChange.cpp" />
     <ClCompile Include="src\Hooks\CBaseEntity_BaseInterpolatePart1.cpp" />
     <ClCompile Include="src\Hooks\CBaseEntity_EstimateAbsVelocity.cpp" />
+    <ClCompile Include="src\Hooks\CBaseEntity_Teleported.cpp" />
+    <ClCompile Include="src\Hooks\CBaseEntity_PreEntityPacketReceived.cpp" />
+    <ClCompile Include="src\Hooks\CBaseEntity_PostNetworkDataReceived.cpp" />
+    <ClCompile Include="src\Hooks\CBasePlayer_PostThink.cpp" />
+    <ClCompile Include="src\Hooks\CMultiPlayerAnimState_ComputePoseParam_AimYaw.cpp" />
+    <ClCompile Include="src\Hooks\CNetChan_ProcessPacket.cpp" />
+    <ClCompile Include="src\Hooks\CPrediction_FinishMove.cpp" />
+    <ClCompile Include="src\Hooks\CPrediction_Update2.cpp" />
     <ClCompile Include="src\Hooks\CBoneFollower_TestCollision.cpp" />
     <ClCompile Include="src\Hooks\CEntityMapData_ExtractValue.cpp" />
     <ClCompile Include="src\Hooks\CGameEventManager_FireEventClientSide.cpp" />

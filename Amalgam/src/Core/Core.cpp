@@ -7,6 +7,7 @@
 #include "../Features/EnginePrediction/EnginePrediction.h"
 #include "../Features/Visuals/Materials/Materials.h"
 #include "../Features/Visuals/Visuals.h"
+#include "../Features/Prediction/CompressionHandler.h"
 #include "../SDK/Events/Events.h"
 #ifdef TEXTMODE
 #include "../Features/Misc/NamedPipe/NamedPipe.h"
@@ -155,6 +156,7 @@ void CCore::Load()
 #ifndef TEXTMODE
 	F::Materials.LoadMaterials();
 #endif
+	F::CompressionHandler.Init();
 	H::ConVars.Unlock();
 #ifndef TEXTMODE
 	H::Fonts.Reload(Vars::Menu::Scale[DEFAULT_BIND]);
