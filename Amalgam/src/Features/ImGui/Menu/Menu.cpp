@@ -1627,6 +1627,11 @@ void CMenu::MenuMisc(int iTab)
 					FToggle(Vars::Misc::Automation::AutoReport, FToggleEnum::Right);
 					FToggle(Vars::Misc::Automation::AutoDisguise, FToggleEnum::Left);
 					FToggle(Vars::Misc::Automation::AutoBanJoiner, FToggleEnum::Right);
+					PushTransparent(!Vars::Misc::Automation::AutoDisguise.Value);
+					{
+						FDropdown(Vars::Misc::Automation::AutoDisguiseClasses);
+					}
+					PopTransparent();
 					FToggle(Vars::Misc::Automation::JoinSpam, FToggleEnum::Left); // i think it doesnt work anymore but dh wanted it so here it is
 				} EndSection();
 				if (Section("Voting", 8))
