@@ -28,7 +28,7 @@ static inline bool ShouldTargetOwner(Group_t& tGroup, int iBit, CBaseEntity* pOw
 		return false;
 
 	if (tGroup.m_iTagFilter >= 0 && tGroup.m_iTagFilter < int(F::PlayerUtils.m_vTags.size()))
-		return F::PlayerUtils.HasTag(pOwner->entindex(), F::PlayerUtils.IndexToTag(tGroup.m_iTagFilter));
+		return F::PlayerUtils.HasTag(pOwner->entindex(), tGroup.m_iTagFilter);
 
 	if (tGroup.m_iConditions & ConditionsEnum::Local && pOwner == pLocal
 		|| tGroup.m_iConditions & ConditionsEnum::Friends && H::Entities.IsFriend(pOwner->entindex())
