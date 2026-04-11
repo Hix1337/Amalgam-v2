@@ -24,6 +24,7 @@
 #include "Interfaces/IGameMovement.h"
 #include "Interfaces/IInput.h"
 #include "Interfaces/IInputSystem.h"
+#include "Interfaces/ILocalize.h"
 #include "Interfaces/IKeyValuesSystem.h"
 #include "Interfaces/IMaterialSystem.h"
 #include "Interfaces/IMatSystemSurface.h"

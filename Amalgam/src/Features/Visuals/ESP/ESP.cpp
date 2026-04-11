@@ -172,9 +172,25 @@ static inline void StorePlayer(CTFPlayer* pPlayer, CTFPlayer* pLocal, Group_t* p
 		tCache.m_pWeaponIcon = pWeapon->GetWeaponIcon();
 	if (pGroup->m_tESP.Draw & ESPEnum::WeaponText && pWeapon)
 	{
-		auto pAttributeManager = U::Memory.CallVirtual<1, void*>(uintptr_t(pWeapon) + 3096);
-		auto pCurItemData = reinterpret_cast<void*>(uintptr_t(pAttributeManager) + 144);
-		tCache.m_vText.emplace_back(ALIGN_BOTTOM, SDK::ConvertWideToUTF8(S::CEconItemView_GetItemName.Call<const wchar_t*>(pCurItemData)), Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
+		std::string sWeaponName;
+		if (Vars::Visuals::UI::OriginalWeaponNames.Value)
+		{
+			if (auto pWeaponInfo = pWeapon->GetWeaponInfo())
+			{
+				const char* szPrint = pWeaponInfo->szPrintName;
+				if (szPrint[0] == '#')
+					sWeaponName = SDK::ConvertWideToUTF8(I::Localize->Find(szPrint));
+				else
+					sWeaponName = szPrint;
+			}
+		}
+		if (sWeaponName.empty())
+		{
+			auto pAttributeManager = U::Memory.CallVirtual<1, void*>(uintptr_t(pWeapon) + 3096);
+			auto pCurItemData = reinterpret_cast<void*>(uintptr_t(pAttributeManager) + 144);
+			sWeaponName = SDK::ConvertWideToUTF8(S::CEconItemView_GetItemName.Call<const wchar_t*>(pCurItemData));
+		}
+		tCache.m_vText.emplace_back(ALIGN_BOTTOM, sWeaponName, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value);
 	}
 
 	if (pGroup->m_tESP.Draw & ESPEnum::LagCompensation && !pPlayer->IsDormant() && !bLocal)
