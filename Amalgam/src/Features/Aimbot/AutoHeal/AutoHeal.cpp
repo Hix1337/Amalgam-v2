@@ -676,13 +676,15 @@ void CAutoHeal::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 		{
 			I::EngineClient->ClientCmd_Unrestricted("slot2");
 			m_iAutoSwitch = 0;
-			return;
 		}
 
-		m_mMedicCallers.clear();
-		m_iResistType = -1;
-		m_flDamagedTime = 0.f;
-		m_iTargetIdx = -1;
+		if (m_iAutoSwitch == 0)
+		{
+			m_mMedicCallers.clear();
+			m_iResistType = -1;
+			m_flDamagedTime = 0.f;
+			m_iTargetIdx = -1;
+		}
 		return;
 	}
 
