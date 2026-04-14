@@ -76,8 +76,8 @@ static bool IsPayloadEscortPaceState(CTFPlayer* pLocal, const Vector& vLocalOrig
 		sLastLevelName = sLevelName;
 	}
 
-	Vector vPayloadPos{};
-	if (!F::PLController.GetClosestPayload(vLocalOrigin, pLocal->m_iTeamNum(), vPayloadPos))
+	auto pPayload = F::PLController.GetClosestPayload(vLocalOrigin, pLocal->m_iTeamNum());
+	if (!pPayload)
 		return false;
 
 	constexpr float flPayloadEscortRadius = 120.0f;
@@ -85,6 +85,7 @@ static bool IsPayloadEscortPaceState(CTFPlayer* pLocal, const Vector& vLocalOrig
 	constexpr float flPayloadMoveThreshold = 4.0f;
 	constexpr float flPayloadMoveGrace = 0.35f;
 
+	Vector vPayloadPos = pPayload->GetAbsOrigin();
 	if (std::fabs(vPayloadPos.z - vLocalOrigin.z) > flMaxHeightDiff)
 		return false;
 

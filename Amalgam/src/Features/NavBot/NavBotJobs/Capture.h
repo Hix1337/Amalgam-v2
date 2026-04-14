@@ -14,6 +14,7 @@ private:
 public:
 	// Overwrite to return true for payload carts as an example
 	bool m_bOverwriteCapture = false;
+	bool m_bWalkTo = false;
 
 	std::wstring m_sCaptureStatus = L"";
 
@@ -23,11 +24,11 @@ private:
 	void ReleaseCaptureSpotClaim();
 
 public:
-	bool GetPayloadGoal(const Vector vLocalOrigin, int iOurTeam, Vector& vOut);
+	bool GetPayloadGoal(const CHandle<CTFPlayer> hLocal, const Vector vLocalOrigin, int iOurTeam, Vector& vOut);
 	bool GetControlPointGoal(const Vector vLocalOrigin, int iOurTeam, Vector& vOut);
 	bool GetCtfGoal(CTFPlayer* pLocal, int iOurTeam, int iEnemyTeam, Vector& vOut);
 	bool GetDoomsdayGoal(CTFPlayer* pLocal, int iOurTeam, int iEnemyTeam, Vector& vOut);
-	bool Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon);
+	bool Run(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* pWeapon);
 	void Reset();
 };
 

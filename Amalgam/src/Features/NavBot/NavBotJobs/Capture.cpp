@@ -113,24 +113,22 @@ bool CNavBotCapture::GetCtfGoal(CTFPlayer* pLocal, int iOurTeam, int iEnemyTeam,
 	return true;
 }
 
-bool CNavBotCapture::GetPayloadGoal(const Vector vLocalOrigin, int iOurTeam, Vector& vOut)
+bool CNavBotCapture::GetPayloadGoal(const CHandle<CTFPlayer> hLocal, const Vector vLocalOrigin, int iOurTeam, Vector& vOut)
 {
 	m_sCaptureStatus = L"Payload";
 
-	Vector vPosition;
-	if (!F::PLController.GetClosestPayload(vLocalOrigin, iOurTeam, vPosition))
+	auto pPayload = F::PLController.GetClosestPayload(vLocalOrigin, iOurTeam);
+	if (!pPayload)
 		return false;
 
-	if (vLocalOrigin.DistToSqr(vPosition) <= pow(150.0f, 2))
-		vPosition.z = vLocalOrigin.z;
-
-	if (vPosition.DistToSqr(vLocalOrigin) <= pow(15.0f, 2))
+	Vector vOrigin = pPayload->GetAbsOrigin();
+	if (vLocalOrigin.DistTo(vOrigin) <= 200.f)
 	{
 		m_bOverwriteCapture = true;
-		return false;
+		m_bWalkTo = !pPayload->m_hHealingTargets().HasElement(hLocal);
 	}
 
-	vOut = vPosition;
+	vOut = vOrigin;
 	return true;
 }
 
@@ -491,7 +489,7 @@ void CNavBotCapture::ReleaseCaptureSpotClaim()
 		m_tCaptureClaimRefresh -= 10.f;
 }
 
-bool CNavBotCapture::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
+bool CNavBotCapture::Run(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 {
 	static Timer tCaptureTimer;
 	static Vector vPreviousTarget;
@@ -517,19 +515,16 @@ bool CNavBotCapture::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 	}
 
 	if (!tCaptureTimer.Check(2.f))
-	{
 		return F::NavEngine.m_eCurrentPriority == PriorityListEnum::Capture;
-	}
 
 	// Priority too high, don't try
 	if (F::NavEngine.m_eCurrentPriority > PriorityListEnum::Capture)
-	{
 		return false;
-	}
 
 	int iOurTeam = pLocal->m_iTeamNum();
 	int iEnemyTeam = iOurTeam == TF_TEAM_BLUE ? TF_TEAM_RED : TF_TEAM_BLUE;
 	m_bOverwriteCapture = false;
+	m_bWalkTo = false;
 
 	const auto vLocalOrigin = pLocal->GetAbsOrigin();
 	bool bGotTarget = false;
@@ -547,7 +542,7 @@ bool CNavBotCapture::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 		bGotTarget = GetControlPointGoal(vLocalOrigin, iOurTeam, vTarget);
 		break;
 	case TF_GAMETYPE_ESCORT:
-		bGotTarget = GetPayloadGoal(vLocalOrigin, iOurTeam, vTarget);
+		bGotTarget = GetPayloadGoal(pLocal->GetRefEHandle(), vLocalOrigin, iOurTeam, vTarget);
 		break;
 	default:
 		if (F::GameObjectiveController.m_bDoomsday)
@@ -562,7 +557,10 @@ bool CNavBotCapture::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 	{
 		if (Vars::Debug::Logging.Value)
 			SDK::Output("NavBotCapture", "Capture.Run: overwritten capture (player is on objective or close enough)", { 150, 255, 150 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
-		F::NavEngine.CancelPath();
+		
+		if (F::NavEngine.IsPathing()) F::NavEngine.CancelPath();
+		if (m_bWalkTo) SDK::WalkTo(pCmd, pLocal, vTarget);
+
 		return true;
 	}
 

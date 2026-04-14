@@ -185,10 +185,11 @@ bool CNavBotEngineer::GetFocusPoint(CTFPlayer* pLocal, ClosestEnemy_t& tClosestE
 		if (F::FlagController.GetSpawnPosition(iLocalTeam, tFocus.m_vPos) 
 			|| F::CPController.GetClosestControlPoint(vLocalOrigin, iEnemyTeam, tFocus.m_vPos))
 			bSet = true;
-		else if (F::PLController.GetClosestPayload(vLocalOrigin, iEnemyTeam, tFocus.m_vPos))
+		else if (auto pPayload = F::PLController.GetClosestPayload(vLocalOrigin, iEnemyTeam))
 		{
 			bSet = true;
 			tFocus.m_bBack = true;
+			tFocus.m_vPos = pPayload->GetAbsOrigin();
 		}
 		else if (tClosestEnemy.m_iEntIdx)
 		{
@@ -197,9 +198,13 @@ bool CNavBotEngineer::GetFocusPoint(CTFPlayer* pLocal, ClosestEnemy_t& tClosestE
 			tFocus.m_bBack = true;
 		}
 	}
-	else if (F::CPController.GetClosestControlPoint(vLocalOrigin, iLocalTeam, tFocus.m_vPos) 
-		|| F::PLController.GetClosestPayload(vLocalOrigin, iLocalTeam, tFocus.m_vPos))
+	else if (F::CPController.GetClosestControlPoint(vLocalOrigin, iLocalTeam, tFocus.m_vPos))
 		bSet = true;
+	else if (auto pPayload = F::PLController.GetClosestPayload(vLocalOrigin, iLocalTeam))
+	{
+		bSet = true;
+		tFocus.m_vPos = pPayload->GetAbsOrigin();
+	}
 	else if (tClosestEnemy.m_iEntIdx)
 	{
 		bSet = true;

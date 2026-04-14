@@ -27,19 +27,20 @@ void CPLController::Update()
 				continue;
 
 			// Add new entry for the team
-			m_aPayloads.at(iTeam - TF_TEAM_RED).push_back(pPayload);
+			m_aPayloads.at(iTeam - TF_TEAM_RED).push_back(pPayload->As<CObjectCartDispenser>());
 		}
 	}
 }
 
-bool CPLController::GetClosestPayload(Vector vPos, int iTeam, Vector& vOut)
+CObjectCartDispenser* CPLController::GetClosestPayload(Vector vPos, int iTeam)
 {
 	// Invalid team
 	if (iTeam < TF_TEAM_RED || iTeam > TF_TEAM_BLUE)
-		return false;
+		return nullptr;
 
-	float flBestDist = FLT_MAX;
-	Vector vBestPos;
+	float flMinDist = FLT_MAX;
+	CObjectCartDispenser* pBestEnt = nullptr;
+
 	// Find best payload
 	for (auto pEntity : m_aPayloads[iTeam - TF_TEAM_RED])
 	{
@@ -48,12 +49,12 @@ bool CPLController::GetClosestPayload(Vector vPos, int iTeam, Vector& vOut)
 
 		const auto vOrigin = pEntity->GetAbsOrigin();
 		const auto flDist = vOrigin.DistToSqr(vPos);
-		if (flDist < flBestDist)
+		if (flDist < flMinDist)
 		{
-			vBestPos = vOrigin;
-			flBestDist = flDist;
+			pBestEnt = pEntity;
+			flMinDist = flDist;
 		}
 	}
-	vOut = vBestPos;
-	return flBestDist != FLT_MAX;
+
+	return pBestEnt;
 }
