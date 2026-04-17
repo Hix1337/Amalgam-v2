@@ -101,9 +101,6 @@ void CFlagController::Update()
 			continue;
 
 		auto pFlag = pEntity->As<CCaptureFlag>();
-		// Cannot use dormant flag, but it is still potentially valid
-		if (pFlag->IsDormant())
-			continue;
 
 		FlagInfo tFlag{};
 		tFlag.m_pFlag = pFlag;
