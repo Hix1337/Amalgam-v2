@@ -45,12 +45,15 @@ private:
 		float m_flLastSeen = 0.f;
 		Vec3 m_vLastPos = {};
 		float m_flNextOffset = 1.f;
+		float m_flAcquireDuration = 0.f;
+		float m_flEnemyBlend = 0.f;
 		float m_flPhase = 0.f;
 		float m_flGlanceDuration = 0.f;
 		float m_flNextGlance = 0.f;
 		bool m_bInitialized = false;
 		bool m_bGlancing = false;
 		Timer m_tOffsetTimer = {};
+		Timer m_tAcquireTimer = {};
 		Timer m_tGlanceTimer = {};
 		Timer m_tGlanceCooldown = {};
 
