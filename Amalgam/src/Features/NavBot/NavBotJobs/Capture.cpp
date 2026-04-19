@@ -731,8 +731,46 @@ bool CNavBotCapture::Run(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* pWeap
 		if (Vars::Debug::Logging.Value)
 			SDK::Output("NavBotCapture", "Capture.Run: overwritten capture (player is on objective or close enough)", { 150, 255, 150 }, OUTPUT_CONSOLE | OUTPUT_DEBUG);
 		
+		auto DoLook = [&](const Vec3& vTarget, bool bTargetValid) -> void
+			{
+				if (G::Attacking == 1)
+				{
+					F::BotUtils.InvalidateLLAP();
+					return;
+				}
+
+				auto eLook = Vars::Misc::Movement::NavEngine::LookAtPath.Value;
+				bool bSilent = eLook == Vars::Misc::Movement::NavEngine::LookAtPathEnum::Silent || eLook == Vars::Misc::Movement::NavEngine::LookAtPathEnum::LegitSilent;
+				bool bLegit = eLook == Vars::Misc::Movement::NavEngine::LookAtPathEnum::Legit || eLook == Vars::Misc::Movement::NavEngine::LookAtPathEnum::LegitSilent;
+
+				if (eLook == Vars::Misc::Movement::NavEngine::LookAtPathEnum::Off)
+				{
+					F::BotUtils.InvalidateLLAP();
+					return;
+				}
+
+				if (bSilent && G::AntiAim)
+				{
+					F::BotUtils.InvalidateLLAP();
+					return;
+				}
+
+				if (bLegit) F::BotUtils.LookLegit(pLocal, pCmd, bTargetValid ? vTarget : Vec3{}, bSilent);
+				else if (bTargetValid)
+				{
+					F::BotUtils.InvalidateLLAP();
+					F::BotUtils.LookAtPath(pCmd, Vec2(vTarget.x, vTarget.y), pLocal->GetEyePosition(), bSilent);
+				}
+				else F::BotUtils.InvalidateLLAP();
+			};
+
 		if (F::NavEngine.IsPathing()) F::NavEngine.CancelPath();
-		if (m_bWalkTo) SDK::WalkTo(pCmd, pLocal, vTarget);
+		if (m_bWalkTo) 
+		{
+			DoLook(vTarget, true);
+			SDK::WalkTo(pCmd, pLocal, vTarget);
+		}
+		else DoLook({}, false);
 
 		return true;
 	}
