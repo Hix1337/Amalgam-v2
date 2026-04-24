@@ -179,8 +179,11 @@ static inline void StorePlayer(CTFPlayer* pPlayer, CTFPlayer* pLocal, Group_t* p
 			{
 				const char* szPrint = pWeaponInfo->szPrintName;
 				if (szPrint[0] == '#')
-					sWeaponName = SDK::ConvertWideToUTF8(I::Localize->Find(szPrint));
-				else
+				{
+					if (auto pwLocalized = I::Localize->Find(szPrint))
+						sWeaponName = SDK::ConvertWideToUTF8(pwLocalized);
+				}
+				else if (szPrint[0] != '\0')
 					sWeaponName = szPrint;
 			}
 		}
