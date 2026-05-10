@@ -2077,17 +2077,19 @@ void CMenu::MenuAnticheat(int iTab)
 								}
 							}
 							const std::string sInitial(1, cInitial);
-							const ImVec2 vTextSize = F::Render.FontBold->CalcTextSizeA(F::Render.FontBold->LegacySize, FLT_MAX, 0.f, sInitial.c_str());
+							ImFont* pBoldFont = F::Render.FontBold ? F::Render.FontBold : F::Render.FontRegular;
+							const ImVec2 vTextSize = pBoldFont->CalcTextSizeA(pBoldFont->LegacySize, FLT_MAX, 0.f, sInitial.c_str());
 							const ImVec2 vTextPos = { vAvatarDrawPos.x + (flAvatarSize - vTextSize.x) / 2, vAvatarDrawPos.y + (flAvatarSize - vTextSize.y) / 2 };
 							const auto tBg = Vars::Menu::Theme::Background.Value;
 							const float flLuma = 0.2126f * (tBg.r / 255.f) + 0.7152f * (tBg.g / 255.f) + 0.0722f * (tBg.b / 255.f);
 							const ImU32 uInitialColor = flLuma < 0.5f ? IM_COL32(240, 240, 240, 230) : IM_COL32(20, 20, 20, 230);
-							pDrawList->AddText(F::Render.FontBold, F::Render.FontBold->LegacySize, vTextPos, uInitialColor, sInitial.c_str());
+							pDrawList->AddText(pBoldFont, pBoldFont->LegacySize, vTextPos, uInitialColor, sInitial.c_str());
 						}
 
 						const float flAvailableWidth = flWidth - flTextOffset - H::Draw.Scale(28);
+						ImFont* pBoldFont = F::Render.FontBold ? F::Render.FontBold : F::Render.FontRegular;
 						SetCursorPos({ vOriginalPos.x + flTextOffset, vOriginalPos.y + H::Draw.Scale(6) });
-						FText(TruncateText(sName, flAvailableWidth, F::Render.FontBold).c_str(), 0, F::Render.FontBold);
+						FText(TruncateText(sName, flAvailableWidth, pBoldFont).c_str(), 0, pBoldFont);
 						SetCursorPos({ vOriginalPos.x + flTextOffset, vOriginalPos.y + H::Draw.Scale(24) });
 						PushStyleColor(ImGuiCol_Text, tReasonColor.Value);
 						FText(TruncateText(sReason, flAvailableWidth).c_str());
