@@ -2,7 +2,7 @@
 
 #include <format>
 #include <Psapi.h>
-#include <Zydis/Zydis.h>
+#include <MinHook/hde/hde64.h>
 
 std::vector<byte> CMemory::PatternToByte(const char* szPattern)
 {
@@ -106,6 +106,13 @@ std::string CMemory::GetModuleName(uintptr_t uAddress)
 
 uintptr_t CMemory::FindSignatureAtAddress(uintptr_t uAddress, const char* szPattern, uintptr_t uSkipAddress, bool* bRetFound)
 {
+	// Convert IDA-Style signature to a byte sequence
+	const auto vPattern = PatternToInt(szPattern);
+	return FindSignatureAtAddress(uAddress, vPattern, uSkipAddress, bRetFound);
+}
+
+uintptr_t CMemory::FindSignatureAtAddress(uintptr_t uAddress, std::vector<int> vPattern, uintptr_t uSkipAddress, bool* bRetFound)
+{
 	if (const auto hMod = GetModuleHandleA(GetModuleName(uAddress).c_str()))
 	{
 		// Get module information to search in the given module
@@ -123,8 +130,6 @@ uintptr_t CMemory::FindSignatureAtAddress(uintptr_t uAddress, const char* szPatt
 		DWORD dwSubtract = DWORD(uAddress - reinterpret_cast<uintptr_t>(hMod));
 		dwImageSize -= dwSubtract;
 
-		// Convert IDA-Style signature to a byte sequence
-		const auto vPattern = PatternToInt(szPattern);
 		const auto iPatternSize = vPattern.size();
 		const int* iPatternBytes = vPattern.data();
 
@@ -206,46 +211,69 @@ std::string CMemory::GenerateSignatureAtAddress(uintptr_t uAddress, size_t maxLe
 	if (!uMaxAddr)
 		return {};
 
-	ZydisDecoder tDecoder;
-	if (ZYAN_FAILED(ZydisDecoderInit(&tDecoder, ZYDIS_MACHINE_MODE_LONG_64, ZYDIS_STACK_WIDTH_64)))
-		return {};
+	// This is stupid but works
+	auto fGetDispSize = [](uint32_t flags) -> byte
+		{
+			byte immOff = 0;
+			if (flags & F_IMM64) immOff = 8;
+			else if (flags & F_IMM32) immOff = 4;
+			else if (flags & F_IMM16) immOff = 2;
+			else if (flags & F_IMM8) immOff = 1;
+
+			byte dispOff = 0;
+			if (flags & F_DISP32) dispOff = 4;
+			else if (flags & F_DISP16) dispOff = 2;
+			else if (flags & F_DISP8) dispOff = 1;
+
+			return dispOff + immOff;
+		};
 
 	uintptr_t uLastFound = uMinAddr;
 	uintptr_t uCurrentAddr = uAddress;
-	
 	while (uCurrentAddr - uAddress < maxLength && uCurrentAddr < uMaxAddr)
 	{
-		ZydisDecodedInstruction tInstruction;
-		if (ZYAN_FAILED(ZydisDecoderDecodeInstruction(&tDecoder, nullptr, (void*)(uCurrentAddr), 15,
-			&tInstruction)))
+		hde64s tDecoded;
+		byte uLen = hde64_disasm((LPVOID)(uCurrentAddr), &tDecoded);
+		if (tDecoded.flags & F_ERROR)
+		{
+			sPattern = "Decoding error";
 			break;
+		}
 
-		// Works
-		byte uOffset = tInstruction.raw.disp.offset + tInstruction.raw.imm->offset;
-		for (int i = 0; i < tInstruction.length; i++)
+		byte uDispSize = fGetDispSize(tDecoded.flags);
+		byte uOffset = uLen - uDispSize;
+		for (int i = 0; i < uLen; i++)
 			vBytes.push_back({ *(byte*)(uCurrentAddr + i), uOffset && i >= uOffset });
 
 		// Attempt to search for this signature, if nothing is found then we have a unique signature
 		{
 			std::string sTempPattern;
+			std::vector<int> vTempPattern;
 			sPattern.clear();
 
-			for (auto [uByte, bWildcard] : vBytes)
+			for (int i = 0; i < vBytes.size(); i++)
 			{
+				auto [uByte, bWildcard] = vBytes.at(i);
 				if (bWildcard)
+				{
 					sTempPattern.append("? ");
-				else
-					sTempPattern.append(std::format("{:02X} ", uByte));
+					if ((i + 1) != vBytes.size())
+						vTempPattern.push_back(-1);
+					continue;
+				}
+				sTempPattern.append(std::format("{:02X} ", uByte));
+				vTempPattern.push_back(uByte);
 			}
 			sTempPattern.pop_back();
 
 			// Try to find it at original address
 			bool bFoundAtCurrent = false;
-			FindSignatureAtAddress(uAddress, sTempPattern.c_str(), uAddress, &bFoundAtCurrent);
+			FindSignatureAtAddress(uAddress, vTempPattern, uAddress, &bFoundAtCurrent);
 
-			uintptr_t uFound = FindSignatureAtAddress(uLastFound, sTempPattern.c_str(), uAddress);
+			uintptr_t uFound = FindSignatureAtAddress(uLastFound, vTempPattern, uAddress);
 			if (bFoundAtCurrent && !uFound)
 			{
+				sTempPattern.erase(sTempPattern.length() - uDispSize*2); // Erase last wildcard bytes
 				sPattern = sTempPattern;
 				break;
 			}
@@ -255,11 +283,11 @@ std::string CMemory::GenerateSignatureAtAddress(uintptr_t uAddress, size_t maxLe
 
 			sPattern = std::format("Not a unique signature ({})", sTempPattern);
 
-			// Update the last found address so we dont have to scan that region anymore
+			// Update the last found address so we dont have to scan that region again
 			uLastFound = uFound;
 		}
 
-		uCurrentAddr += tInstruction.length;
+		uCurrentAddr += uLen;
 	}
 
 	return sPattern;
