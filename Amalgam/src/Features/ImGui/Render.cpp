@@ -114,12 +114,6 @@ void CRender::LoadFonts()
 
 	io.Fonts->Build();
 	io.ConfigDebugHighlightIdConflicts = false;
-
-	if (!FontSmall)   FontSmall   = FontRegular;
-	if (!FontBold)    FontBold    = FontRegular;
-	if (!FontLarge)   FontLarge   = FontRegular;
-	if (!FontMono)    FontMono    = FontRegular;
-	if (!IconFont)    IconFont    = FontRegular;
 }
 
 void CRender::LoadStyle()
