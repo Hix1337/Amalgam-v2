@@ -17,7 +17,9 @@ void CAutoHeal::AutoHeal(CTFPlayer* pLocal, CWeaponMedigun* pWeapon, CUserCmd* p
 
 	m_iTargetIdx = pTarget->entindex();
 
-	if (G::SavedWepIds[SLOT_PRIMARY] == TF_WEAPON_CROSSBOW && Vars::Aimbot::Healing::AutoArrow.Value && Vars::Aimbot::Healing::AutoSwitch.Value)
+	if (G::SavedWepIds[SLOT_PRIMARY] == TF_WEAPON_CROSSBOW &&
+		Vars::Aimbot::Healing::AutoArrow.Value && Vars::Aimbot::Healing::AutoSwitch.Value &&
+		!(pCmd->buttons & IN_ATTACK2) && !pTarget->IsUbered() && !pTarget->InCond(TF_COND_MEGAHEAL))
 	{
 		if (auto pCrossbow = pLocal->GetWeaponFromSlot(SLOT_PRIMARY))
 		{
@@ -30,8 +32,8 @@ void CAutoHeal::AutoHeal(CTFPlayer* pLocal, CWeaponMedigun* pWeapon, CUserCmd* p
 			float flNextPrimaryAttack = pCrossbow->m_flNextPrimaryAttack();
 			if (flNextPrimaryAttack - flDeployTime <= I::GlobalVars->curtime && pTarget->m_iHealth() < pTarget->GetMaxHealth() - Vars::Aimbot::Healing::AutoSwitchHealth.Value)
 			{
-				float flMinCharge = pWeapon->GetMedigunType() == MEDIGUN_RESIST ? 0.25f : 1.f;
-				if (pWeapon->m_flChargeLevel() < flMinCharge || pTarget->IsInvulnerable()
+				float flMinCharge = pWeapon->GetMedigunType() == MEDIGUN_RESIST ? 0.25f : 96.f;
+				if (pWeapon->m_flChargeLevel() < flMinCharge
 					|| pTarget->InCond(TF_COND_BULLET_IMMUNE) || pTarget->InCond(TF_COND_MEDIGUN_UBER_BULLET_RESIST)
 					|| pTarget->InCond(TF_COND_BLAST_IMMUNE) || pTarget->InCond(TF_COND_MEDIGUN_UBER_BLAST_RESIST)
 					|| pTarget->InCond(TF_COND_FIRE_IMMUNE) || pTarget->InCond(TF_COND_MEDIGUN_UBER_FIRE_RESIST))
@@ -67,11 +69,25 @@ void CAutoHeal::AutoHeal(CTFPlayer* pLocal, CWeaponMedigun* pWeapon, CUserCmd* p
 
 static bool ShouldPopAtHealth(CTFPlayer* pTarget, float flScale, int iResistType)
 {
-	if (pTarget->IsInvulnerable()
-		|| pTarget->InCond(TF_COND_MEDIGUN_UBER_BULLET_RESIST) && iResistType == MEDIGUN_BULLET_RESIST
-		|| pTarget->InCond(TF_COND_MEDIGUN_UBER_BLAST_RESIST) && iResistType == MEDIGUN_BLAST_RESIST
-		|| pTarget->InCond(TF_COND_MEDIGUN_UBER_FIRE_RESIST) && iResistType == MEDIGUN_FIRE_RESIST)
+	if (pTarget->IsInvulnerable())
 		return false;
+
+	switch (iResistType)
+	{
+	case MEDIGUN_BULLET_RESIST:
+		if (pTarget->InCond(TF_COND_MEDIGUN_UBER_BULLET_RESIST) || pTarget->InCond(TF_COND_BULLET_IMMUNE))
+			return false;
+		break;
+	case MEDIGUN_BLAST_RESIST:
+		if (pTarget->InCond(TF_COND_MEDIGUN_UBER_BLAST_RESIST) || pTarget->InCond(TF_COND_BLAST_IMMUNE))
+			return false;
+		break;
+	case MEDIGUN_FIRE_RESIST:
+		if (pTarget->InCond(TF_COND_MEDIGUN_UBER_FIRE_RESIST) || pTarget->InCond(TF_COND_FIRE_IMMUNE))
+			return false;
+		break;
+	default: break;
+	}
 
 	return pTarget->m_iHealth() <= pTarget->GetMaxHealth() * flScale;
 }
@@ -82,17 +98,19 @@ void CAutoHeal::Activate(CTFPlayer* pLocal, CWeaponMedigun* pWeapon, CUserCmd* p
 		return;
 
 	float flHealthScale = Vars::Aimbot::Healing::ActivationHealthPercent.Value / 100;
-	if (flHealthScale && ShouldPopAtHealth(pLocal, flHealthScale, m_iResistType))	// Self check
+	if (flHealthScale && ShouldPopAtHealth(pLocal, flHealthScale, pWeapon->GetResistType()))	// Self check
+	{
 		pCmd->buttons |= IN_ATTACK2;
+		return;
+	}
 
 	auto pTarget = pWeapon->m_hHealingTarget().Get();
-	if (!pTarget
-		|| Vars::Aimbot::Healing::HealPriority.Value == Vars::Aimbot::Healing::HealPriorityEnum::FriendsOnly
+	if (!pTarget || Vars::Aimbot::Healing::ActivateFriendsOnly.Value
 		&& !H::Entities.IsFriend(pTarget->entindex()) && !H::Entities.InParty(pTarget->entindex()))
 		return;
 
 	if ((Vars::Aimbot::Healing::ActivateOnVoice.Value && m_mMedicCallers.contains(pTarget->entindex())) ||
-		(flHealthScale && ShouldPopAtHealth(pTarget->As<CTFPlayer>(), flHealthScale, m_iResistType)))
+		(flHealthScale && ShouldPopAtHealth(pTarget->As<CTFPlayer>(), flHealthScale, pWeapon->GetResistType())))
 		pCmd->buttons |= IN_ATTACK2;
 }
 
@@ -636,8 +654,7 @@ void CAutoHeal::AutoVaccinator(CTFPlayer* pLocal, CWeaponMedigun* pWeapon, CUser
 
 	std::vector<CTFPlayer*> vTargets = { pLocal };
 	if (auto pTarget = pWeapon->m_hHealingTarget()->As<CTFPlayer>(); pTarget &&
-		(Vars::Aimbot::Healing::HealPriority.Value <= Vars::Aimbot::Healing::HealPriorityEnum::FriendsOnly
-		|| H::Entities.IsFriend(pTarget->entindex()) || H::Entities.InParty(pTarget->entindex())))
+		(!Vars::Aimbot::Healing::ActivateFriendsOnly.Value || H::Entities.IsFriend(pTarget->entindex()) || H::Entities.InParty(pTarget->entindex())))
 		vTargets.push_back(pTarget);
 
 	for (auto pTarget : vTargets)
@@ -696,12 +713,13 @@ void CAutoHeal::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 			return;
 		}
 	}
-	AutoHeal(pLocal, pWeapon->As<CWeaponMedigun>(), pCmd);
 
 	Activate(pLocal, pWeapon->As<CWeaponMedigun>(), pCmd);
 	m_mMedicCallers.clear();
 
 	AutoVaccinator(pLocal, pWeapon->As<CWeaponMedigun>(), pCmd);
+
+	AutoHeal(pLocal, pWeapon->As<CWeaponMedigun>(), pCmd);
 }
 
 void CAutoHeal::Event(IGameEvent* pEvent, uint32_t uHash)
@@ -714,8 +732,7 @@ void CAutoHeal::Event(IGameEvent* pEvent, uint32_t uHash)
 			return;
 
 		auto pWeapon = H::Entities.GetWeapon()->As<CWeaponMedigun>();
-		if (!pWeapon
-			|| pWeapon->GetWeaponID() != TF_WEAPON_MEDIGUN || pWeapon->GetMedigunType() != MEDIGUN_RESIST)
+		if (!pWeapon || pWeapon->GetWeaponID() != TF_WEAPON_MEDIGUN || pWeapon->GetMedigunType() != MEDIGUN_RESIST)
 			return;
 
 		int iVictim = I::EngineClient->GetPlayerForUserID(pEvent->GetInt("userid"));
@@ -728,7 +745,7 @@ void CAutoHeal::Event(IGameEvent* pEvent, uint32_t uHash)
 		int iTarget = pWeapon->m_hHealingTarget().GetEntryIndex();
 		if (iVictim == iAttacker || iVictim != I::EngineClient->GetLocalPlayer()
 			&& (iVictim != iTarget
-			|| Vars::Aimbot::Healing::HealPriority.Value == Vars::Aimbot::Healing::HealPriorityEnum::FriendsOnly
+			|| Vars::Aimbot::Healing::ActivateFriendsOnly.Value
 			&& !H::Entities.IsFriend(iTarget) && !H::Entities.InParty(iTarget)))
 			return;
 

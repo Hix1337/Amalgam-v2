@@ -391,7 +391,9 @@ void CMenu::MenuAimbot(int iTab)
 					FToggle(Vars::Aimbot::Healing::AutoSandvich, FToggleEnum::Left);
 					FToggle(Vars::Aimbot::Healing::AutoVaccinator, FToggleEnum::Right);
 					FToggle(Vars::Aimbot::Healing::ActivateOnVoice, FToggleEnum::Left);
-					FSlider(Vars::Aimbot::Healing::ActivationHealthPercent, FSliderEnum::Right, Vars::Aimbot::Healing::ActivationHealthPercent[DEFAULT_BIND] <= 0.f ? "Off" : "%g%%");
+					FToggle(Vars::Aimbot::Healing::ActivateFriendsOnly, FToggleEnum::Right);
+					FSlider(Vars::Aimbot::Healing::ActivationHealthPercent, FSliderEnum::None, Vars::Aimbot::Healing::ActivationHealthPercent[DEFAULT_BIND] <= 0.f ? "Off" : "%g%%");
+
 					PushTransparent(!Vars::Aimbot::Healing::AutoArrow.Value);
 					{
 						FToggleSlider(Vars::Aimbot::Healing::AutoSwitch, Vars::Aimbot::Healing::AutoSwitchHealth);
@@ -1469,6 +1471,7 @@ void CMenu::MenuHvH(int iTab)
 					FToggle(Vars::AntiAim::MinWalk, FToggleEnum::Left);
 					FToggle(Vars::AntiAim::AntiOverlap, FToggleEnum::Left);
 					FToggle(Vars::AntiAim::InvalidShootPitch, FToggleEnum::Right);
+					FToggle(Vars::AntiAim::TauntSpin);
 				} EndSection();
 			}
 			/* Column 2 */
@@ -1655,6 +1658,11 @@ void CMenu::MenuMisc(int iTab)
 				{
 					FToggle(Vars::Misc::Automation::TauntControl);
 					FToggleSlider(Vars::Misc::Automation::AutoTaunt, Vars::Misc::Automation::AutoTauntChance);
+					PushTransparent(!Vars::Misc::Automation::AutoTaunt.Value);
+					{
+						FSlider(Vars::Misc::Automation::AutoTauntSlot, FSliderEnum::None, Vars::Misc::Automation::AutoTauntSlot.Value == 0 ? "weapon" : "%i");
+					}
+					PopTransparent();
 				} EndSection();
 				if (Section("Game", 8))
 				{

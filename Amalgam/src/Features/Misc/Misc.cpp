@@ -1093,13 +1093,6 @@ void CMisc::Event(IGameEvent* pEvent, uint32_t uHash)
 		if (!Vars::Misc::Automation::AutoTaunt.Value)
 			break;
 
-		const auto pLocal = H::Entities.GetLocal();
-		if (!pLocal || !pLocal->IsAlive())
-			break;
-
-		if (pLocal->IsTaunting() || pLocal->InCond(TF_COND_HALLOWEEN_KART))
-			break;
-
 		if (iAttacker != iLocalPlayer || iAttacker == iVictim)
 			break;
 
@@ -1107,10 +1100,43 @@ void CMisc::Event(IGameEvent* pEvent, uint32_t uHash)
 		if (!iChance)
 			break;
 
+		const auto pLocal = H::Entities.GetLocal();
+		if (!pLocal || !pLocal->IsAlive())
+			break;
+
+		if (pLocal->IsTaunting() || pLocal->InCond(TF_COND_HALLOWEEN_KART))
+			break;
+
 		if (SDK::RandomInt(1, 100) > iChance)
 			break;
 
-		I::EngineClient->ClientCmd_Unrestricted("taunt");
+		if (!Vars::Misc::Automation::AutoTauntSlot.Value)
+		{
+weapon_taunt:
+			I::EngineClient->ClientCmd_Unrestricted("taunt");
+			break;
+		}
+
+		// Check if we actually have a taunt at that slot
+		{
+			auto pInventoryManager = I::TFInventoryManager();
+			if (!pInventoryManager)
+				goto weapon_taunt;
+
+			auto pLocalInventory = pInventoryManager->GetLocalInventory();
+			if (!pLocalInventory)
+				goto weapon_taunt;
+
+			auto pEconItemView = pLocalInventory->GetItemInLoadout(pLocal->m_iClass(), Vars::Misc::Automation::AutoTauntSlot.Value + 10);
+			if (!pEconItemView)
+				goto weapon_taunt;
+
+			auto pItemDefinition = pEconItemView->GetStaticData();
+			if (!pItemDefinition || !pItemDefinition->m_pTauntData())
+				goto weapon_taunt;
+		}
+
+		I::EngineClient->ClientCmd_Unrestricted(std::format("taunt {}", Vars::Misc::Automation::AutoTauntSlot.Value).c_str());
 		break;
 	}
 	case FNV1A::Hash32Const("vote_maps_changed"):

@@ -462,6 +462,7 @@ NAMESPACE_BEGIN(Vars)
 			CVar(AutoSandvich, "Auto sandvich", false);
 			CVar(AutoVaccinator, "Auto vaccinator", false);
 			CVar(ActivateOnVoice, "Activate on voice", false);
+			CVar(ActivateFriendsOnly, "Activate friends only", false);
 			CVar(ActivationHealthPercent, "Activate at health", 0.f, SLIDER_MIN | SLIDER_PRECISION, 0.f, 100.f, 5.f, "%g%%");
 			CVar(AutoSwitchHealth, "Switch at", 75, SLIDER_CLAMP, 75, 200);
 
@@ -940,6 +941,7 @@ I dont think this is a good idea to disable simulations completely:
 				Scout = 1 << 0, Sniper = 1 << 1, Soldier = 1 << 2, Demoman = 1 << 3, Medic = 1 << 4, Heavy = 1 << 5, Pyro = 1 << 6, Spy = 1 << 7, Engineer = 1 << 8);
 			CVar(AutoTaunt, "Auto taunt on kill", false);
 			CVar(AutoTauntChance, "Auto taunt chance", 100, SLIDER_CLAMP, 0, 100, 1, "%i%%");
+			CVar(AutoTauntSlot, "Auto taunt slot", 0, SLIDER_CLAMP, 0, 8);
 			CVar(AchievementSpam, "Achievement spam", false);
 			CVar(AchievementSpamID, "Achievement spam id", 2332);
 			struct AchievementSpamEntry_t
@@ -1247,7 +1249,7 @@ I dont think this is a good idea to disable simulations completely:
 			CVar(AutoCompetitiveQueue, "Auto competitive queue", false);
 			CVar(MapPopularizing, "Map popularizing mode", false);
 			CVar(MapBarBoost, "Boost Playercount Visualizer", false);
-			CVar(AutoAbandonIfNoNavmesh, "Auto abandon if no navmesh", true);
+			CVar(AutoAbandonIfNoNavmesh, "Auto abandon if no navmesh", false);
 			CVar(AutoDumpProfiles, "Auto dump profiles", false);
 			CVar(AutoDumpDelay, "Auto dump delay", 15, SLIDER_CLAMP, 0, 120, 1, "%is");
 			CVar(QueueDelay, "Queue delay", 5, SLIDER_MIN, 0, 10, 1, "%im");

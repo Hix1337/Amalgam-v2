@@ -70,6 +70,7 @@
     - MannUp queue
   - Cathook's autoitem system (Automatically equip weapons, hats, noisemakers. Currently glitchy on textmode builds)
   - `-insecure` bypass (Bypasses client-side checks allowing to join VAC protected servers.)
+  - Premium crafting bypass (Bypasses client-side restictions allowing to use the crafting mechanic.)
   - Added weapon shooting sound break exploit (Switches weapons back and forth every attack avoiding shoot sound. Soldier only)
   - MvM:
     - Buybot: Performs MVM upgrade station exploit which can result in huge amounts of cash (You have to be playing medic with a vaccinator and walk to the upgrade station while the `Buybot` automatically buys and refunds an upgrade giving you additional cash). Stops at a specified cash count.
@@ -119,6 +120,5 @@
   - Import/export-able cheaterlist
 - **Other**
   - Added debug var automatic loading (`Load debug settings` in menu)
-  - Auto accept item drops now removes the notification from ui aswell (actually it doesnt but i remember it did some time ago)
   - Changed loading process allowing for early injection (e.g. Xenos manual launch)
   - Added signature generator for crash log call trace

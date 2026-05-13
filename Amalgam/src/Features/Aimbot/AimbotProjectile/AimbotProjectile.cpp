@@ -117,18 +117,21 @@ static inline std::vector<Target_t> GetTargets(CTFPlayer* pLocal, CTFWeaponBase*
 		auto eGroup = EntityEnum::Invalid;
 		if (Vars::Aimbot::General::Target.Value & Vars::Aimbot::General::TargetEnum::Players)
 			eGroup = !F::AimbotGlobal.FriendlyFire() || Vars::Aimbot::General::Ignore.Value & Vars::Aimbot::General::IgnoreEnum::Team ? EntityEnum::PlayerEnemy : EntityEnum::PlayerAll;
+		
+		bool bHeal = false, bCrossbow = false;
 		switch (pWeapon->GetWeaponID())
 		{
 		case TF_WEAPON_CROSSBOW:
 			if (Vars::Aimbot::Healing::AutoArrow.Value)
 				eGroup = eGroup != EntityEnum::Invalid ? EntityEnum::PlayerAll : EntityEnum::PlayerTeam;
+			bHeal = bCrossbow = true;
 			break;
 		case TF_WEAPON_LUNCHBOX:
 			if (Vars::Aimbot::Healing::AutoSandvich.Value)
 				eGroup = EntityEnum::PlayerTeam;
+			bHeal = true;
 			break;
 		}
-		bool bHeal = pWeapon->GetWeaponID() == TF_WEAPON_CROSSBOW || pWeapon->GetWeaponID() == TF_WEAPON_LUNCHBOX;
 
 		for (auto pEntity : H::Entities.GetGroup(eGroup))
 		{
@@ -138,7 +141,7 @@ static inline std::vector<Target_t> GetTargets(CTFPlayer* pLocal, CTFWeaponBase*
 			bool bTeam = pEntity->m_iTeamNum() == pLocal->m_iTeamNum();
 			if (bTeam && bHeal)
 			{
-				if (pEntity->As<CTFPlayer>()->m_iHealth() >= pEntity->As<CTFPlayer>()->GetMaxHealth()
+				if (pEntity->As<CTFPlayer>()->m_iHealth() >= pEntity->As<CTFPlayer>()->GetMaxHealth() || (bCrossbow && pEntity->As<CTFPlayer>()->IsUbered())
 					|| Vars::Aimbot::Healing::HealPriority.Value == Vars::Aimbot::Healing::HealPriorityEnum::FriendsOnly && !H::Entities.IsFriend(pEntity->entindex()) && !H::Entities.InParty(pEntity->entindex()))
 					continue;
 			}
