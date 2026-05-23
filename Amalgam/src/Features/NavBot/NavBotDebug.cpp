@@ -4,13 +4,9 @@
 #include <format>
 #include <string>
 
-#include "DangerManager/DangerManager.h"
+#include "Hazards/Hazards.h"
 #include "NavBotCore.h"
-#include "NavBotJobs/Capture.h"
-#include "NavBotJobs/Engineer.h"
-#include "NavBotJobs/Reload.h"
-#include "NavBotJobs/Roam.h"
-#include "NavBotJobs/StayNear.h"
+#include "NavBotJobs/NavBotJobs.h"
 #include "NavEngine/NavEngine.h"
 #include "../CritHack/CritHack.h"
 #include "../../SDK/SDK.h"
@@ -198,18 +194,18 @@ namespace NavBotDebug
 		int i_drawn = 0;
 		const float fl_max_dist = Vars::Misc::Movement::NavBot::DangerOverlayMaxDist.Value;
 		const float fl_max_dist_sqr = fl_max_dist * fl_max_dist;
-		for (const auto& [p_area, t_data] : F::DangerManager.GetDangerMap())
+		for (const auto& [p_area, t_data] : F::Hazards.GetHazardMap())
 		{
-			if (!F::NavEngine.GetNavMap() || !F::NavEngine.GetNavMap()->IsAreaValid(p_area) || t_data.m_flScore <= 0.f)
+			if (!F::NavEngine.GetNavMap() || !F::NavEngine.GetNavMap()->IsAreaValid(p_area) || t_data.m_flCost <= 0.f)
 				continue;
 
 			if (p_area->m_vCenter.DistToSqr(pLocal->GetAbsOrigin()) > fl_max_dist_sqr)
 				continue;
 
 			Color_t t_overlay_color = Color_t(255, 200, 0, 80);
-			if (t_data.m_flScore >= DANGER_SCORE_STICKY)
+			if (t_data.m_flCost >= HAZARD_COST_STICKY)
 				t_overlay_color = Color_t(255, 50, 50, 90);
-			else if (t_data.m_flScore >= DANGER_SCORE_ENEMY_NORMAL)
+			else if (t_data.m_flCost >= HAZARD_COST_ENEMY_NORMAL)
 				t_overlay_color = Color_t(255, 140, 0, 90);
 
 			G::SphereStorage.push_back({ p_area->m_vCenter, 24.f, 10, 10, I::GlobalVars->curtime + I::GlobalVars->interval_per_tick * 2.f, t_overlay_color, Color_t(), true });

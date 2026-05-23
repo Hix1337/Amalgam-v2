@@ -812,13 +812,14 @@ I dont think this is a good idea to disable simulations completely:
 			CVar(FastStop, "Fast stop", false);
 			CVar(FastAccelerate, "Fast accelerate", false);
 			CVar(DuckSpeed, "Duck speed", false);
+			CVar(DuckSpeedNavbotCompat, "Duck speed navbot compatibility", false);
+			CVar(DuckSpeedForward, "Duck speed forward", false);
 			CVar(MovementLock, "Movement lock", false);
 			CVar(BreakJump, "Break jump", false);
 			CVar(ShieldTurnRate, "Shield turn rate", false);
 
 			NAMESPACE_BEGIN(NavEngine)
 				CVar(Enabled, VA_LIST("Enabled", "Nav engine enabled"), false);
-				CVar(PathRandomization, "Path randomization", false);
 				CVar(PathInSetup, "Path in setup time", false);
 				CVarEnum(Draw, "Draw", 0b011, VISUAL | DROPDOWN_MULTI, nullptr,
 					VA_LIST("Path", "Areas", "Blacklisted zones", "Possible paths", "Walkable (Debug)"),
@@ -933,6 +934,8 @@ I dont think this is a good idea to disable simulations completely:
 			CVarEnum(AntiAutobalance, "Anti-autobalance", 0, NONE, nullptr,
 				VA_LIST("Off", "Retry", "Retry on death"),
 				Off, Retry, RetryOnDeath);
+			CVar(AutoRetry, "Auto retry", false);
+			CVar(AutoRetryHealth, "Retry below health", 35, SLIDER_CLAMP, 1, 450, 1, "%i HP");
 			CVar(TauntControl, "Taunt control", false);
 			CVar(KartControl, "Kart control", false);
 			CVar(AutoDisguise, "Auto disguise", false);
@@ -1165,6 +1168,12 @@ I dont think this is a good idea to disable simulations completely:
 				CVar(ChatRelay, "Chat relay", false);
 				CVar(VoteKickReply, "Vote kick reply", false);
 			NAMESPACE_END(ChatSpam)
+
+			NAMESPACE_BEGIN(KillSay)
+				CVar(Enable, "Kill say", false);
+				CVar(Chance, "Kill say chance", 100, SLIDER_CLAMP, 0, 100, 1, "%i%%");
+				CVar(TeamChat, "Team chat", false);
+			NAMESPACE_END(KillSay)
 
 			NAMESPACE_BEGIN(AutoItem)
 				CVarEnum(Enable, "Enable", 0b0, DROPDOWN_MULTI, nullptr,

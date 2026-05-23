@@ -5,7 +5,7 @@
 #include "../../Misc/NamedPipe/NamedPipe.h"
 #include "../../Ticks/Ticks.h"
 #include "../../EnginePrediction/EnginePrediction.h"
-#include "../../NavBot/NavBotJobs/StayNear.h"
+#include "../../NavBot/NavBotJobs/NavBotJobs.h"
 #include "../../Followbot/Followbot.h"
 
 std::vector<Target_t> CAimbotGlobal::ManageTargets(std::vector<Target_t>(*GetTargets)(CTFPlayer* pLocal, CTFWeaponBase* pWeapon), CTFPlayer* pLocal, CTFWeaponBase* pWeapon,

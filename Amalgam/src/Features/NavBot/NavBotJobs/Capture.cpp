@@ -1,5 +1,4 @@
-#include "Capture.h"
-#include "../NavEngine/NavEngine.h"
+#include "NavBotJobs.h"
 #include "../../Players/PlayerUtils.h"
 #include "../../Aimbot/AimbotProjectile/AimbotProjectile.h"
 #include "../NavEngine/Controllers/CPController/CPController.h"

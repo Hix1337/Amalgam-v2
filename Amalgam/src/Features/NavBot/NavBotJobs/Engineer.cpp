@@ -1,6 +1,4 @@
-#include "Engineer.h"
-#include "GetSupplies.h"
-#include "../NavEngine/NavEngine.h"
+#include "NavBotJobs.h"
 #include "../NavEngine/Controllers/FlagController/FlagController.h"
 #include "../NavEngine/Controllers/CPController/CPController.h"
 #include "../NavEngine/Controllers/PLController/PLController.h"

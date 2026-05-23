@@ -29,6 +29,7 @@ private:
 	void CallVoteSpam(CTFPlayer* pLocal);
 
 	void AutoReport();
+	void AutoRetry(CTFPlayer* pLocal);
 	void CheatsBypass();
 	void WeaponSway();
 
@@ -56,6 +57,9 @@ private:
 	//bool bSteamCleared = false;
 
 	std::vector<std::string> m_vChatSpamLines;
+	std::vector<std::string> m_vKillSayLines;
+	void DoKillSay(int iVictim);
+	void EnsureChatUtilsDoc();
 	struct AutoReply_t { std::vector<std::string> vTriggers; std::vector<std::string> vReplies; };
 	std::vector<AutoReply_t> m_vAutoReplies;
 	std::vector<std::string> m_vF1Messages;
@@ -121,7 +125,7 @@ public:
 	void AutoMvmReadyUp();
 	void OnVoteStart(int iCaller, int iTarget, const std::string& sTarget);
 	void OnChatMessage(int iEntIndex, const std::string& sName, const std::string& sMsg);
-	std::string ReplaceTags(std::string sMsg, std::string sTarget = "", std::string sInitiator = "");
+	std::string ReplaceTags(std::string sMsg, std::string sTarget = "", std::string sInitiator = "", std::string sKiller = "", std::string sVictim = "");
 	ProfileDumpResult_t DumpProfiles(bool bAnnounce = true);
 
 	int m_iWishCmdrate = -1;

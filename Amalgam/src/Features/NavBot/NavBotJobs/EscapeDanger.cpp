@@ -1,6 +1,5 @@
-#include "EscapeDanger.h"
-#include "NavJobUtils.h"
-#include "../NavEngine/NavEngine.h"
+#include "NavBotJobs.h"
+#include "../NavBotCore.h"
 #include "../NavEngine/Controllers/FlagController/FlagController.h"
 #include "../NavEngine/Controllers/Controller.h"
 

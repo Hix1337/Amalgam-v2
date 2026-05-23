@@ -1563,6 +1563,8 @@ void CMenu::MenuMisc(int iTab)
 					FToggle(Vars::Misc::Movement::FastStop, FToggleEnum::Right);
 					FToggle(Vars::Misc::Movement::FastAccelerate, FToggleEnum::Left);
 					FToggle(Vars::Misc::Movement::DuckSpeed, FToggleEnum::Right);
+					FToggle(Vars::Misc::Movement::DuckSpeedNavbotCompat, FToggleEnum::Left);
+					FToggle(Vars::Misc::Movement::DuckSpeedForward, FToggleEnum::Right);
 					FToggle(Vars::Misc::Movement::MovementLock, FToggleEnum::Left);
 					FToggle(Vars::Misc::Movement::ShieldTurnRate, FToggleEnum::Right);
 					FToggle(Vars::Misc::Movement::NoPush, FToggleEnum::Left);
@@ -1627,6 +1629,7 @@ void CMenu::MenuMisc(int iTab)
 					FToggle(Vars::Misc::Automation::AcceptItemDrops);
 					FToggle(Vars::Misc::Automation::AntiAFK, FToggleEnum::Left);
 					FDropdown(Vars::Misc::Automation::AntiAutobalance, FDropdownEnum::Right);
+					FToggleSlider(Vars::Misc::Automation::AutoRetry, Vars::Misc::Automation::AutoRetryHealth);
 					FToggle(Vars::Misc::Automation::KartControl, FToggleEnum::Left);
 					FToggle(Vars::Misc::Automation::AutoReport, FToggleEnum::Right);
 					FToggle(Vars::Misc::Automation::AutoDisguise, FToggleEnum::Left);
@@ -1702,8 +1705,7 @@ void CMenu::MenuMisc(int iTab)
 				{
 					FToggle(Vars::Misc::Movement::NavEngine::Enabled, FToggleEnum::Left);
 					FToggle(Vars::Misc::Movement::NavEngine::PathInSetup, FToggleEnum::Right);
-					FToggle(Vars::Misc::Movement::NavEngine::PathRandomization, FToggleEnum::Left);
-					FToggle(Vars::Misc::Movement::NavBot::SmartJump, FToggleEnum::Right);
+					FToggle(Vars::Misc::Movement::NavBot::SmartJump, FToggleEnum::Left);
 					PushTransparent(!Vars::Misc::Movement::NavEngine::Enabled.Value);
 					{
 						FDropdown(Vars::Misc::Movement::NavEngine::Draw, FDropdownEnum::Multi, -60);
@@ -1909,6 +1911,12 @@ void CMenu::MenuMisc(int iTab)
 					FToggle(Vars::Misc::Automation::ChatSpam::AutoReply, FToggleEnum::Left);
 					FToggle(Vars::Misc::Automation::ChatSpam::ChatRelay, FToggleEnum::Right);
 					FToggle(Vars::Misc::Automation::ChatSpam::VoteKickReply, FToggleEnum::Left);
+					FToggleSlider(Vars::Misc::Automation::KillSay::Enable, Vars::Misc::Automation::KillSay::Chance);
+					PushTransparent(!Vars::Misc::Automation::KillSay::Enable.Value);
+					{
+						FToggle(Vars::Misc::Automation::KillSay::TeamChat);
+					}
+					PopTransparent();
 					FDropdown(Vars::Misc::Automation::VoiceCommandSpam);
 					FToggle(Vars::Misc::Automation::Micspam, FToggleEnum::Left);
 					FToggle(Vars::Misc::Automation::AchievementSpam, FToggleEnum::Right);

@@ -1,9 +1,6 @@
-#include "Roam.h"
-#include "Capture.h"
-#include "NavJobUtils.h"
+#include "NavBotJobs.h"
 #include "../NavAreaUtils.h"
-#include "../DangerManager/DangerManager.h"
-#include "../NavEngine/NavEngine.h"
+#include "../Hazards/Hazards.h"
 #include "../NavEngine/Controllers/Controller.h"
 
 namespace
@@ -229,7 +226,7 @@ bool CNavBotRoam::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
 		RoamCandidate_t tCandidate{};
 		tCandidate.m_pArea = &tArea;
 		tCandidate.m_flBlacklistPenalty = flBlacklistPenalty;
-		tCandidate.m_flDangerCost = F::DangerManager.GetCost(&tArea);
+		tCandidate.m_flDangerCost = F::Hazards.GetCost(&tArea);
 		tCandidate.m_bSoftBlocked = bSoftBlocked;
 		vCandidates.push_back(tCandidate);
 	}

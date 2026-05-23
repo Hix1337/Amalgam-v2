@@ -1,6 +1,4 @@
-#include "Melee.h"
-#include "Reload.h"
-#include "../NavEngine/NavEngine.h"
+#include "NavBotJobs.h"
 
 namespace
 {

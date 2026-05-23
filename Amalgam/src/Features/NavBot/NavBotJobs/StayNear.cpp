@@ -1,6 +1,5 @@
-#include "StayNear.h"
-#include "NavJobUtils.h"
-#include "../NavEngine/NavEngine.h"
+#include "NavBotJobs.h"
+#include "../NavBotCore.h"
 #include "../../Players/PlayerUtils.h"
 
 namespace

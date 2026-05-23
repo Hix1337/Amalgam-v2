@@ -1,11 +1,9 @@
 #include "NavBotCore.h"
 
-#include "DangerManager/DangerManager.h"
+#include "Hazards/Hazards.h"
 #include "NavAreaUtils.h"
 #include "NavEngine/NavEngine.h"
-#include "NavBotJobs/Engineer.h"
-#include "NavBotJobs/Reload.h"
-#include "NavBotJobs/StayNear.h"
+#include "NavBotJobs/NavBotJobs.h"
 #include "NavRuntime.h"
 #include "../FollowBot/FollowBot.h"
 #include "../CritHack/CritHack.h"
@@ -209,7 +207,7 @@ void CNavBotCore::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 	m_tSelectedConfig = NavBotConfig::Select(pLocal, pWeapon);
 
 	UpdateSlot(pLocal, F::BotUtils.m_tClosestEnemy);
-	F::DangerManager.Update(pLocal);
+	F::Hazards.Update(pLocal);
 
 	// TODO:
 	// Add engie logic and target sentries logic. (Done)

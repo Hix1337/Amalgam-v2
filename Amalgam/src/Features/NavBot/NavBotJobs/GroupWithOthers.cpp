@@ -1,6 +1,5 @@
-#include "GroupWithOthers.h"
+#include "NavBotJobs.h"
 #include "../../Misc/NamedPipe/NamedPipe.h"
-#include "../NavEngine/NavEngine.h"
 
 namespace
 {

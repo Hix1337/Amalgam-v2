@@ -16,6 +16,7 @@ MAKE_SIGNATURE(ReportPlayerAccount, "client.dll", "48 89 5C 24 ? 57 48 83 EC ? 4
 
 void CMisc::RunPre(CTFPlayer* pLocal, CUserCmd* pCmd)
 {
+	EnsureChatUtilsDoc();
 	NoiseSpam(pLocal);
 	VoiceCommandSpam(pLocal);
 	ChatSpam(pLocal);
@@ -27,6 +28,7 @@ void CMisc::RunPre(CTFPlayer* pLocal, CUserCmd* pCmd)
 	CheatsBypass();
 	WeaponSway();
 	AutoReport();
+	AutoRetry(pLocal);
 
 #ifdef TEXTMODE
 	F::NamedPipe.Store(pLocal, true);
@@ -938,12 +940,20 @@ void CMisc::FastMovement(CTFPlayer* pLocal, CUserCmd* pCmd)
 			|| G::Attacking == 1 || F::Ticks.m_bDoubletap || F::Ticks.m_bSpeedhack || F::Ticks.m_bRecharge || G::AntiAim)
 			return;
 
-		if (!(pCmd->buttons & (IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT)))
+		if (!(pCmd->buttons & (IN_FORWARD | IN_BACK | IN_MOVELEFT | IN_MOVERIGHT))
+			&& !(Vars::Misc::Movement::DuckSpeedNavbotCompat.Value && (pCmd->forwardmove || pCmd->sidemove)))
 			return;
 
 		bool bChoke = !I::ClientState->chokedcommands && F::Ticks.CanChoke(true);
 		if (!bChoke)
 			return;
+
+		if (Vars::Misc::Movement::DuckSpeedForward.Value)
+		{
+			pCmd->forwardmove *= -1.f;
+			pCmd->sidemove *= -1.f;
+			pCmd->viewangles.x = 91.f;
+		}
 
 		Vec3 vMove = { pCmd->forwardmove, pCmd->sidemove, 0.f };
 		Vec3 vAngMoveReverse = Math::VectorAngles(-vMove);
@@ -1021,6 +1031,7 @@ void CMisc::Event(IGameEvent* pEvent, uint32_t uHash)
 	case FNV1A::Hash32Const("client_beginconnect"):
 	case FNV1A::Hash32Const("game_newmap"):
 		m_vChatSpamLines.clear();
+		m_vKillSayLines.clear();
 		m_iCurrentChatSpamIndex = 0;
 		m_bAutoBalanceTeamChangePending = false;
 		ResetBuyBot();
@@ -1088,6 +1099,8 @@ void CMisc::Event(IGameEvent* pEvent, uint32_t uHash)
 			player_info_t pi;
 			if (I::EngineClient->GetPlayerInfo(iVictim, &pi))
 				m_sLastKilledName = pi.name;
+
+			DoKillSay(iVictim);
 		}
 
 		if (!Vars::Misc::Automation::AutoTaunt.Value)
@@ -1536,6 +1549,22 @@ void CMisc::AutoReport()
 	}
 }
 
+void CMisc::AutoRetry(CTFPlayer* pLocal)
+{
+	if (!Vars::Misc::Automation::AutoRetry.Value || !pLocal || !pLocal->IsAlive())
+		return;
+
+	if (pLocal->m_iHealth() >= Vars::Misc::Automation::AutoRetryHealth.Value)
+		return;
+
+	static Timer tRetryTimer{};
+	if (!tRetryTimer.Run(5.0f))
+		return;
+
+	I::EngineClient->ClientCmd_Unrestricted("retry");
+}
+
+
 void CMisc::ChatSpam(CTFPlayer* pLocal)
 {
 	auto ResetChatTimer = [&]()
@@ -1638,6 +1667,143 @@ void CMisc::ChatSpam(CTFPlayer* pLocal)
 
 	SDK::Output("ChatSpam", std::format("Sending: {}", sChatCommand).c_str(), {}, OUTPUT_CONSOLE | OUTPUT_DEBUG);
 	I::EngineClient->ClientCmd_Unrestricted(sChatCommand.c_str());
+}
+
+void CMisc::EnsureChatUtilsDoc()
+{
+	static bool bWritten = false;
+	if (bWritten)
+		return;
+	bWritten = true;
+
+	const std::string sPath = F::Configs.m_sConfigPath + "chatutils_readme.txt";
+	if (std::filesystem::exists(sPath))
+		return;
+
+	static const char* szDoc =
+		"================================================================\n"
+		"  ChatUtils Documentation\n"
+		"================================================================\n"
+		"\n"
+		"All chat-related text features read plain .txt files from this\n"
+		"cfg folder. Each file is auto-generated with examples the first\n"
+		"time the corresponding feature runs. Lines starting with // and\n"
+		"empty lines are ignored. Edit, save, and the file is reloaded\n"
+		"automatically (within ~5 seconds).\n"
+		"\n"
+		"----------------------------------------------------------------\n"
+		"  Files\n"
+		"----------------------------------------------------------------\n"
+		"\n"
+		"  cat_chatspam.txt   Lines sent on a timer by Chat Spam.\n"
+		"                     One message per line.\n"
+		"\n"
+		"  killsay.txt        Lines sent when YOU kill another player.\n"
+		"                     One message per line, picked at random.\n"
+		"\n"
+		"  votekick.txt       Replies fired when a vote kick starts.\n"
+		"                     Prefix each line with `F1:` or `F2:`.\n"
+		"                       F1: used when a friend/you call the vote\n"
+		"                       F2: used when someone votes on a friend/you\n"
+		"\n"
+		"  autoreply.txt      Trigger-based replies in public chat.\n"
+		"                     Format:  trigger1, trigger2 : reply1, reply2\n"
+		"                     Triggers are matched case-insensitively as\n"
+		"                     substrings; one reply is chosen at random.\n"
+		"\n"
+		"  chat_relay.txt     Output-only log of every chat message seen\n"
+		"                     (server IP, map, name, message). Written by\n"
+		"                     the Chat Relay toggle. Do not hand-edit.\n"
+		"\n"
+		"----------------------------------------------------------------\n"
+		"  Tags (work in every file above except chat_relay)\n"
+		"----------------------------------------------------------------\n"
+		"\n"
+		"  {killer}        Your in-game name (KillSay).\n"
+		"  {victim}        Name of the player you just killed (KillSay).\n"
+		"  {target}        Vote-kick target / autoreply sender.\n"
+		"  {triggername}   Same thing as {target}.\n"
+		"  {initiator}     Player who called the current vote.\n"
+		"  {enemyteam}     `RED` or `BLU` - the opposite of your team.\n"
+		"  {friendlyteam}  `RED` or `BLU` - your team.\n"
+		"  {lastkilled}    Name of the last player you killed. (Global)\n"
+		"  {highestscore}  Name of the player with the highest score.\n"
+		"  {random}        Random non-bot player on the server.\n"
+		"  {friend}        Random player tagged FRIEND.\n"
+		"  {ignored}       Random player tagged IGNORED.\n"
+		"\n"
+		"Tags only resolve when the relevant data is available - e.g.\n"
+		"{killer}/{victim} are empty outside KillSay, {target} is empty\n"
+		"outside vote replies / auto-replies.\n"
+		"\n"
+		"----------------------------------------------------------------\n"
+		"  PS\n"
+		"----------------------------------------------------------------\n"
+		"\n"
+		"  - Messages are truncated to 150 characters after tag expansion.\n"
+		"  - Kill Say honours the Chance slider in the menu.\n"
+		"  - Use Team Chat toggles in the menu to switch say -> say_team.\n"
+		"\n"
+		"================================================================\n";
+
+	std::ofstream file(sPath);
+	if (file.good())
+		file << szDoc;
+}
+
+void CMisc::DoKillSay(int iVictim)
+{
+	if (!Vars::Misc::Automation::KillSay::Enable.Value)
+		return;
+
+	const int iChance = std::clamp(Vars::Misc::Automation::KillSay::Chance.Value, 0, 100);
+	if (!iChance || SDK::RandomInt(1, 100) > iChance)
+		return;
+
+	static Timer tReloadTimer{};
+	if (m_vKillSayLines.empty() || tReloadTimer.Run(5.0f))
+	{
+		static const char* szDefaultContent =
+			"// Kill Say configuration\n"
+			"// Each non-empty, non-// line is a possible message sent when you get a kill.\n"
+			"// Supports tags: {killer}, {victim}, {enemyteam}, {friendlyteam}, {random}, {friend}, {ignored}, {highestscore}, {lastkilled}\n"
+			"SO FUHIN EASY!!! GET GOOD, GET UNIBOX!\n"
+			"{victim} YOURE SO TRASH!\n"
+			"WHAT??? YOU DIED TO ME, {killer}??? HOW COULD YOU BE THIS BAD??? {enemyteam} IS CARRYING YOU SO BAD!!!\n"
+			"{friendlyteam} IS SUPERIOR, JUST LIKE {killer} AND UNIBOX! UNLIKE {victim} AND {enemyteam}!\n"
+			"I AM THE FUCKING SPECTRE\n";
+		LoadLines("killsay.txt", m_vKillSayLines, szDefaultContent);
+	}
+
+	if (m_vKillSayLines.empty())
+		return;
+
+	std::string sVictim;
+	{
+		player_info_t pi;
+		if (I::EngineClient->GetPlayerInfo(iVictim, &pi))
+			sVictim = pi.name;
+	}
+
+	std::string sKiller;
+	{
+		player_info_t pi;
+		if (I::EngineClient->GetPlayerInfo(I::EngineClient->GetLocalPlayer(), &pi))
+			sKiller = pi.name;
+	}
+
+	const int iIndex = SDK::RandomInt(0, static_cast<int>(m_vKillSayLines.size()) - 1);
+	std::string sLine = ReplaceTags(m_vKillSayLines[iIndex], "", "", sKiller, sVictim);
+
+	if (sLine.length() > 150)
+		sLine.resize(150);
+
+	std::string sCommand = Vars::Misc::Automation::KillSay::TeamChat.Value
+		? "say_team \"" + sLine + "\""
+		: "say \"" + sLine + "\"";
+
+	SDK::Output("KillSay", std::format("Sending: {}", sCommand).c_str(), {}, OUTPUT_CONSOLE | OUTPUT_DEBUG);
+	I::EngineClient->ClientCmd_Unrestricted(sCommand.c_str());
 }
 
 void CMisc::AutoMvmReadyUp()
@@ -2119,7 +2285,7 @@ CMisc::ProfileDumpResult_t CMisc::DumpProfiles(bool bAnnounce)
 	return tResult;
 }
 
-std::string CMisc::ReplaceTags(std::string sMsg, std::string sTarget, std::string sInitiator)
+std::string CMisc::ReplaceTags(std::string sMsg, std::string sTarget, std::string sInitiator, std::string sKiller, std::string sVictim)
 {
 	auto ReplaceAll = [&](std::string& str, const std::string& from, const std::string& to)
 		{
@@ -2140,6 +2306,12 @@ std::string CMisc::ReplaceTags(std::string sMsg, std::string sTarget, std::strin
 
 	if (!sInitiator.empty())
 		ReplaceAll(sMsg, "{initiator}", sInitiator);
+
+	if (!sKiller.empty())
+		ReplaceAll(sMsg, "{killer}", sKiller);
+
+	if (!sVictim.empty())
+		ReplaceAll(sMsg, "{victim}", sVictim);
 
 	if (sMsg.find("{enemyteam}") != std::string::npos || sMsg.find("{friendlyteam}") != std::string::npos)
 	{

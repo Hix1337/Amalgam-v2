@@ -1,6 +1,6 @@
 #pragma once
 #include "BotUtils.h"
-#include "NavBotJobs/JobSystem.h"
+#include "NavBotJobs/NavBotJobs.h"
 #include "NavBotConfig.h"
 #include "NavBotDebug.h"
 

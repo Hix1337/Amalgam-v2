@@ -17,37 +17,24 @@ private:
 	std::vector<CFuncPasstimeGoal*> m_vGoals = {};
 	CPasstimeBall* m_pBall = nullptr;
 	CTFPasstimeLogic* m_pLogic = nullptr;
-	Vector m_vGoalAxis = { 1.0f, 0.0f, 0.0f };
-	float m_flGoalAxisCenter = 0.0f;
-	bool m_bHasGoalAxis = false;
-	int m_iTeamHomeSide[4] = {};
-	bool m_bHasTeamHomeSide[4] = {};
-	Vector m_vTeamSpawnCenter[4] = {};
-	bool m_bHasTeamSpawnCenter[4] = {};
 
-	void UpdateGoalAxis();
-	void UpdateTeamHomeSides();
-	void UpdateTeamSpawnCenters();
-	int GetGoalSide(const Vector& vGoalPos) const;
-	int GetTeamHomeSide(int iTeam) const;
-	bool IsNeutralGoalForScoringTeam(int iScoringTeam, const Vector& vGoalPos) const;
-	int GetGoalTeam(CFuncPasstimeGoal* pGoal, std::string* pTargetname = nullptr) const;
+	int GetGoalTeam(CFuncPasstimeGoal* pGoal) const;
+	Vector GetThrowTargetPos(const PasstimeGoalInfo& tGoal, const Vector& vRelativePos);
 
 public:
 	void Init();
 	void Update();
 
 	CPasstimeBall* GetBall();
-	CTFPasstimeLogic* GetLogic();
+	CTFPasstimeLogic* GetLogic() { return m_pLogic; }
 	int GetCarrier();
-	float GetMaxPassRange();
+	float GetMaxPassRange() { return m_pLogic ? m_pLogic->m_flMaxPassRange() : FLT_MAX; }
 
 	bool GetGoalInfo(int iScoringTeam, const Vector& vRelativePos, PasstimeGoalInfo& tOut);
 	bool GetGoalPos(int iScoringTeam, const Vector& vRelativePos, Vector& vOut);
 	bool GetBallPos(Vector& vOut);
-	bool IsEndzoneGoal(int iGoalType) const;
+	bool IsEndzoneGoal(int iGoalType) const { return iGoalType == CFuncPasstimeGoal::TYPE_ENDZONE; }
 	bool IsPointInGoal(const PasstimeGoalInfo& tGoal, const Vector& vPoint) const;
-	Vector GetThrowTargetPos(const PasstimeGoalInfo& tGoal, const Vector& vRelativePos);
 };
 
 ADD_FEATURE(CPasstimeController, PasstimeController);

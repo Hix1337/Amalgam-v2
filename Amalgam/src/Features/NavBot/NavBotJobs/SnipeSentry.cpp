@@ -1,6 +1,5 @@
-#include "SnipeSentry.h"
-#include "NavJobUtils.h"
-#include "../NavEngine/NavEngine.h"
+#include "NavBotJobs.h"
+#include "../NavBotCore.h"
 
 namespace
 {

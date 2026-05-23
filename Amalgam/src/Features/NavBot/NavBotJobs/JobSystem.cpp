@@ -1,21 +1,10 @@
-#include "JobSystem.h"
+#include "NavBotJobs.h"
+#include "../NavBotCore.h"
 
 #include <algorithm>
 #include <array>
 #include <limits>
 
-#include "Capture.h"
-#include "Engineer.h"
-#include "EscapeDanger.h"
-#include "GetSupplies.h"
-#include "GroupWithOthers.h"
-#include "Melee.h"
-#include "Reload.h"
-#include "Roam.h"
-#include "SnipeSentry.h"
-#include "StayNear.h"
-#include "../BotUtils.h"
-#include "../NavEngine/NavEngine.h"
 #include "../NavEngine/Controllers/Controller.h"
 #include "../NavEngine/Controllers/FlagController/FlagController.h"
 

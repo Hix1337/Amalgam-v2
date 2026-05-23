@@ -12,7 +12,7 @@
 #include "../../Features/Visuals/Visuals.h"
 #include "../../Features/Killstreak/Killstreak.h"
 #include "../../Features/NavBot/NavEngine/NavEngine.h"
-#include "../../Features/NavBot/NavBotJobs/EscapeDanger.h"
+#include "../../Features/NavBot/NavBotJobs/NavBotJobs.h"
 #ifdef TEXTMODE
 #include "../../Features/Misc/NamedPipe/NamedPipe.h"
 #endif
