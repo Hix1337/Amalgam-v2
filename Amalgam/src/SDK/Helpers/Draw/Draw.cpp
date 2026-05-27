@@ -675,9 +675,9 @@ void CDraw::RenderSphere(const Vector& vCenter, float flRadius, int nTheta, int 
 	if (!tColor.a)
 		return;
 
-	static auto pVertexColor = *reinterpret_cast<IMaterial**>(U::Memory.RelToAbs(S::VertexColor()));
-	static auto pVertexColorIgnoreZ = *reinterpret_cast<IMaterial**>(U::Memory.RelToAbs(S::VertexColorIgnoreZ()));
-	auto pMaterial = bZBuffer ? pVertexColor : pVertexColorIgnoreZ;
+	auto pMaterial = *reinterpret_cast<IMaterial**>(U::Memory.RelToAbs(bZBuffer ? S::VertexColor() : S::VertexColorIgnoreZ()));
+	if (!pMaterial)
+		return;
 
 	RenderSphere(vCenter, flRadius, nTheta, nPhi, tColor, pMaterial);
 }
@@ -687,9 +687,9 @@ void CDraw::RenderWireframeSphere(const Vector& vCenter, float flRadius, int nTh
 	if (!tColor.a)
 		return;
 
-	static auto pWireframe = *reinterpret_cast<IMaterial**>(U::Memory.RelToAbs(S::Wireframe()));
-	static auto pWireframeIgnoreZ = *reinterpret_cast<IMaterial**>(U::Memory.RelToAbs(S::WireframeIgnoreZ()));
-	auto pMaterial = bZBuffer ? pWireframe : pWireframeIgnoreZ;
+	auto pMaterial = *reinterpret_cast<IMaterial**>(U::Memory.RelToAbs(bZBuffer ? S::Wireframe() : S::WireframeIgnoreZ()));
+	if (!pMaterial)
+		return;
 
 	RenderSphere(vCenter, flRadius, nTheta, nPhi, tColor, pMaterial);
 }

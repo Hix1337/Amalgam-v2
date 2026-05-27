@@ -31,6 +31,17 @@ std::vector<Target_t> CAimbotGlobal::ManageTargets(std::vector<Target_t>(*GetTar
 	return vTargets;
 }
 
+static int GetTargetHealth(CBaseEntity* pEntity)
+{
+	if (!pEntity)
+		return 0;
+	if (pEntity->IsPlayer())
+		return pEntity->As<CBasePlayer>()->m_iHealth();
+	if (pEntity->IsBuilding())
+		return pEntity->As<CBaseObject>()->m_iHealth();
+	return 0;
+}
+
 void CAimbotGlobal::SortTargetsPre(std::vector<Target_t>& vTargets, int iMethod)
 {
 	switch (iMethod)
@@ -46,6 +57,18 @@ void CAimbotGlobal::SortTargetsPre(std::vector<Target_t>& vTargets, int iMethod)
 		std::sort(vTargets.begin(), vTargets.end(), [&](const Target_t& a, const Target_t& b) -> bool
 		{
 			return a.m_flDistTo < b.m_flDistTo;
+		});
+		break;
+	case Vars::Aimbot::General::TargetSelectionEnum::MostHealth:
+		std::sort(vTargets.begin(), vTargets.end(), [&](const Target_t& a, const Target_t& b) -> bool
+		{
+			return GetTargetHealth(a.m_pEntity) > GetTargetHealth(b.m_pEntity);
+		});
+		break;
+	case Vars::Aimbot::General::TargetSelectionEnum::LeastHealth:
+		std::sort(vTargets.begin(), vTargets.end(), [&](const Target_t& a, const Target_t& b) -> bool
+		{
+			return GetTargetHealth(a.m_pEntity) < GetTargetHealth(b.m_pEntity);
 		});
 		break;
 	}
