@@ -175,7 +175,7 @@ static inline void StorePlayer(CTFPlayer* pPlayer, CTFPlayer* pLocal, Group_t* p
 		std::string sWeaponName;
 		if (Vars::Visuals::UI::OriginalWeaponNames.Value)
 		{
-			if (auto pWeaponInfo = pWeapon->GetWeaponInfo())
+			if (auto pWeaponInfo = pWeapon->m_pWeaponInfo())
 			{
 				const char* szPrint = pWeaponInfo->szPrintName;
 				if (szPrint[0] == '#')
