@@ -26,6 +26,7 @@
 #include "Interfaces/IInputSystem.h"
 #include "Interfaces/ILocalize.h"
 #include "Interfaces/IKeyValuesSystem.h"
+#include "Interfaces/ILocalize.h"
 #include "Interfaces/IMaterialSystem.h"
 #include "Interfaces/IMatSystemSurface.h"
 #include "Interfaces/IMemAlloc.h"

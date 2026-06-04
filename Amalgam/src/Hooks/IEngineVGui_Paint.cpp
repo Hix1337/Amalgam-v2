@@ -1,5 +1,9 @@
 #include "../SDK/SDK.h"
 
+#include "../Features/Visuals/Notifications/Notifications.h"
+#include "../Features/Visuals/ESP/ESP.h"
+#include "../Features/Visuals/OffscreenArrows/OffscreenArrows.h"
+#include "../Features/Visuals/CameraWindow/CameraWindow.h"
 #include "../Features/Visuals/Visuals.h"
 #include "../Features/Ticks/Ticks.h"
 #include "../Features/CritHack/CritHack.h"
@@ -12,9 +16,11 @@
 #include "../Features/Visuals/OffscreenArrows/OffscreenArrows.h"
 #include "../Features/Visuals/CameraWindow/CameraWindow.h"
 #include "../Features/Visuals/Notifications/Notifications.h"
+#include "../Features/PacketManip/AntiAim/AntiAim.h"
 #include "../Features/NavBot/NavBotCore.h"
 #include "../Features/Aimbot/AutoHeal/AutoHeal.h"
 #include "../Features/Misc/AutoQueue/AutoQueue.h"
+#include "../Features/Visuals/Materials/Materials.h"
 
 MAKE_HOOK(IEngineVGui_Paint, U::Memory.GetVirtual(I::EngineVGui, 14), void,
 	void* rcx, int iMode)
@@ -24,9 +30,11 @@ MAKE_HOOK(IEngineVGui_Paint, U::Memory.GetVirtual(I::EngineVGui, 14), void,
 	if (G::Unload)
 		return CALL_ORIGINAL(rcx, iMode);
 
-	F::AutoQueue.Run();
+	const bool bInGame = iMode & PAINT_INGAMEPANELS && I::EngineClient->IsInGame();
+	if (bInGame)
+		F::AutoQueue.Run();
 
-	if (iMode & PAINT_INGAMEPANELS && !SDK::CleanScreenshot())
+	if (bInGame && !SDK::CleanScreenshot() && F::Materials.m_bLoaded)
 	{
 		H::Draw.UpdateScreenSize();
 		H::Draw.UpdateW2SMatrix();
@@ -35,11 +43,11 @@ MAKE_HOOK(IEngineVGui_Paint, U::Memory.GetVirtual(I::EngineVGui, 14), void,
 		if (auto pLocal = H::Entities.GetLocal())
 		{
 			F::CameraWindow.Draw();
-			F::Visuals.DrawAntiAim(pLocal);
 
+			F::AntiAim.Draw(pLocal);
 			F::Visuals.DrawPickupTimers();
 			F::ESP.Draw();
-			F::Arrows.Draw(pLocal);
+			F::OffscreenArrows.Draw(pLocal);
 			F::Aimbot.Draw(pLocal);
 
 #ifdef DEBUG_VACCINATOR
@@ -59,7 +67,7 @@ MAKE_HOOK(IEngineVGui_Paint, U::Memory.GetVirtual(I::EngineVGui, 14), void,
 
 	CALL_ORIGINAL(rcx, iMode);
 
-	if (iMode & PAINT_UIPANELS && !SDK::CleanScreenshot())
+	if (iMode & PAINT_UIPANELS && !SDK::CleanScreenshot() && F::Materials.m_bLoaded)
 	{
 		H::Draw.UpdateScreenSize();
 		H::Draw.UpdateKeyStrings();

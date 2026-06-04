@@ -3,7 +3,7 @@
 #include "../Features/Aimbot/Aimbot.h"
 #include "../Features/Backtrack/Backtrack.h"
 #include "../Features/Binds/Binds.h"
-#include "../Features/CheaterDetection/CheaterDetection.h"
+#include "../Features/CheatDetection/CheatDetection.h"
 #include "../Features/CritHack/CritHack.h"
 #include "../Features/Players/PlayerUtils.h"
 #include "../Features/Resolver/Resolver.h"
@@ -56,11 +56,11 @@ MAKE_HOOK(CHLClient_FrameStageNotify, U::Memory.GetVirtual(I::Client, 35), void,
 		F::ESP.Store(pLocal);
 		F::Chams.Store(pLocal);
 		F::Glow.Store(pLocal);
-		F::Arrows.Store();
+		F::OffscreenArrows.Store();
 		F::Visuals.Store();
 #endif
 
-		F::CheaterDetection.Run();
+		F::CheatDetection.Run();
 #ifndef TEXTMODE
 		F::Spectate.NetUpdateEnd(pLocal);
 
