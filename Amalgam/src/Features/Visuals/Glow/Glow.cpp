@@ -72,7 +72,8 @@ void CGlow::SecondEnd(Glow_t tGlow, IMatRenderContext* pRenderContext, int w, in
 
 	if (tGlow.Blur)
 	{
-		m_pBloomAmount->SetFloatValue(tGlow.Blur);
+		if (auto pBloomAmount = m_pMatBlurY ? m_pMatBlurY->FindVar("$bloomamount", nullptr) : nullptr)
+			pBloomAmount->SetFloatValue(tGlow.Blur);
 
 		pRenderContext->PushRenderTargetAndViewport();
 		{
@@ -235,8 +236,12 @@ void CGlow::RenderSecond()
 
 void CGlow::RenderBacktrack(const DrawModelState_t& pState, const ModelRenderInfo_t& pInfo)
 {
-	auto pEntity = I::ClientEntityList->GetClientEntity(pInfo.entity_index)->As<CTFPlayer>();
-	if (!pEntity || !pEntity->IsPlayer())
+	auto pEntityBase = I::ClientEntityList->GetClientEntity(pInfo.entity_index);
+	if (!pEntityBase)
+		return;
+
+	auto pEntity = pEntityBase->As<CTFPlayer>();
+	if (!pEntity->IsPlayer())
 		return;
 
 	std::vector<TickRecord*> vRecords = {};
@@ -426,7 +431,6 @@ void CGlow::Initialize()
 		KeyValues* kv = new KeyValues("BlurFilterY");
 		kv->SetString("$basetexture", "RenderBuffer2");
 		m_pMatBlurY = F::Materials.Create("MatBlurY", kv);
-		m_pBloomAmount = m_pMatBlurY->FindVar("$bloomamount", nullptr);
 	}
 }
 
@@ -451,7 +455,6 @@ void CGlow::Unload()
 		m_pMatBlurY->DecrementReferenceCount();
 		m_pMatBlurY->DeleteIfUnreferenced();
 		m_pMatBlurY = nullptr;
-		m_pBloomAmount = nullptr;
 	}
 
 	if (m_pMatHaloAddToScreen)
