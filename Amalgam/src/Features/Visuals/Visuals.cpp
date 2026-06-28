@@ -1246,31 +1246,37 @@ void CVisuals::OverrideWorldTextures()
 		return;
 	}
 
-	KeyValues* kv = new KeyValues("LightmappedGeneric");
-	if (!kv)
-		return;
-
+	std::string texture_name;
+	std::string extra_vmt;
 	switch (uHash)
 	{
 	case FNV1A::Hash32Const("Dev"):
-		kv->SetString("$basetexture", "dev/dev_measuregeneric01b");
+		texture_name = "dev/dev_measuregeneric01b";
 		break;
 	case FNV1A::Hash32Const("Camo"):
-		kv->SetString("$basetexture", "patterns/paint_strokes");
+		texture_name = "patterns/paint_strokes";
 		break;
 	case FNV1A::Hash32Const("Black"):
-		kv->SetString("$basetexture", "patterns/combat/black");
+		texture_name = "patterns/combat/black";
 		break;
 	case FNV1A::Hash32Const("White"):
-		kv->SetString("$basetexture", "patterns/combat/white");
+		texture_name = "patterns/combat/white";
 		break;
 	case FNV1A::Hash32Const("Gray"):
-		kv->SetString("$basetexture", "vgui/white_additive");
-		kv->SetString("$color2", "[0.12 0.12 0.15]");
+		texture_name = "vgui/white_additive";
+		extra_vmt = "\n\t$color2 \"[0.12 0.12 0.15]\"";
 		break;
 	default:
-		kv->SetString("$basetexture", Vars::Visuals::World::WorldTexture.Value.c_str());
+		texture_name = Vars::Visuals::World::WorldTexture.Value;
 	}
+
+	std::string vmt =
+		"\"LightmappedGeneric\""
+		"\n{"
+		"\n\t$basetexture \"" + texture_name + "\"" + extra_vmt +
+		"\n}";
+	m_v_world_texture_key_values.reserve(m_v_world_texture_key_values.size() + I::MaterialSystem->GetNumMaterials());
+	MaterialLock_t material_lock = I::MaterialSystem->Lock();
 
 	for (auto h = I::MaterialSystem->FirstMaterial(); h != I::MaterialSystem->InvalidMaterial(); h = I::MaterialSystem->NextMaterial(h))
 	{
@@ -1285,8 +1291,21 @@ void CVisuals::OverrideWorldTextures()
 			|| sName.find("water") != std::string_view::npos)
 			continue;
 
+		KeyValues* kv = new KeyValues("LightmappedGeneric");
+		if (!kv)
+			continue;
+
+		if (!kv->LoadFromBuffer("LightmappedGeneric", vmt.c_str()))
+		{
+			kv->DeleteThis();
+			continue;
+		}
+
 		pMaterial->SetShaderAndParams(kv);
+		m_v_world_texture_key_values.push_back(kv);
 	}
+
+	I::MaterialSystem->Unlock(material_lock);
 }
 
 static inline void ApplyModulation(Color_t tColor, bool bSky = false)
