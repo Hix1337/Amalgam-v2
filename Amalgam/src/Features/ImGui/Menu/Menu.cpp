@@ -3,6 +3,7 @@
 #ifndef TEXTMODE
 
 #include "Components.h"
+#include "../Notifications/Notifications.h"
 #include "../../Configs/Configs.h"
 #include "../../Binds/Binds.h"
 #include "../../Visuals/Groups/Groups.h"
@@ -174,113 +175,253 @@ static ImTextureID GetAvatarTexture(uint32_t uAccountID)
 	return static_cast<ImTextureID>(0);
 }
 
+static bool RoleDropdown(const char* sLabel, std::vector<int>& vRoles)
+{
+	using namespace ImGui;
+
+	std::vector<int> vValidRoles = {};
+	std::vector<const char*> vEntries = {};
+	for (int i = 0; i < F::PlayerUtils.m_vTags.size(); i++)
+	{
+		auto& tTag = F::PlayerUtils.m_vTags[i];
+		if (tTag.m_bLabel)
+			continue;
+
+		vValidRoles.push_back(i);
+		vEntries.push_back(tTag.m_sName.c_str());
+	}
+
+	for (auto it = vRoles.begin(); it != vRoles.end();)
+	{
+		if (std::ranges::find(vValidRoles, *it) == vValidRoles.end())
+			it = vRoles.erase(it);
+		else
+			++it;
+	}
+
+	std::string sPreview = "";
+	for (int iRole : vRoles)
+	{
+		if (auto pTag = F::PlayerUtils.GetTag(iRole))
+			sPreview += std::format("{}, ", pTag->m_sName);
+	}
+	if (sPreview.length() > 1)
+	{
+		sPreview.pop_back();
+		sPreview.pop_back();
+	}
+	else
+		sPreview = "All";
+
+	bool bReturn = false;
+	const ImVec2 vSize = { GetWindowWidth() - GetStyle().WindowPadding.x * 2.f, H::Draw.Scale(40) };
+	const ImVec2 vOriginalPos = GetCursorPos();
+	DebugShift({ 0, GetStyle().WindowPadding.y });
+	PushStyleVar(ImGuiStyleVar_FramePadding, { 0.f, H::Draw.Scale(13.5f) });
+	PushItemWidth(vSize.x);
+
+	bool bActive = BeginCombo(std::format("##{}", sLabel).c_str(), "", ImGuiComboFlags_CustomPreview | ImGuiComboFlags_NoArrowButton | ImGuiComboFlags_HeightLarge);
+	if (bActive)
+	{
+		DebugDummy({ 0, H::Draw.Scale(8) });
+		PushStyleVar(ImGuiStyleVar_ItemSpacing, { 0, H::Draw.Scale(19) });
+		for (int i = 0; i < vEntries.size(); i++)
+		{
+			const int iRole = vValidRoles[i];
+			const bool bActiveRole = std::ranges::find(vRoles, iRole) != vRoles.end();
+			ImVec2 vEntryPos = GetCursorPos();
+			if (FSelectable(std::format("##{}{}", vEntries[i], i).c_str(), nullptr, 0, bActiveRole, ImGuiSelectableFlags_DontClosePopups))
+			{
+				if (bActiveRole)
+					std::erase(vRoles, iRole);
+				else
+					vRoles.push_back(iRole);
+				bReturn = true;
+			}
+
+			ImVec2 vNextPos = GetCursorPos();
+			SetCursorPos(vEntryPos + ImVec2(H::Draw.Scale(40), 0));
+			TextColored(bActiveRole ? F::Render.Active : F::Render.Inactive, vEntries[i]);
+			SameLine();
+			DebugDummy({ H::Draw.Scale(!GetCurrentWindow()->ScrollbarY ? 16 : 9), 0 });
+			FCheckboxIcon(GetDrawPos() + vEntryPos + ImVec2(H::Draw.Scale(18), H::Draw.Scale(3)), bActiveRole);
+			SetCursorPos(vNextPos);
+		}
+		PopStyleVar();
+		SetCursorPosY(GetCursorPosY() - H::Draw.Scale(10));
+		DebugDummy({});
+		EndCombo();
+	}
+	if (!Disabled && IsItemHovered())
+		SetMouseCursor(ImGuiMouseCursor_Hand);
+	if (BeginComboPreview())
+	{
+		ImVec2 vPreviewPos = GetCursorPos();
+		SetCursorPos(vPreviewPos + ImVec2(H::Draw.Scale(12), H::Draw.Scale(-6)));
+		PushFont(F::Render.FontSmall);
+		TextColored(F::Render.Inactive, TruncateText(StripDoubleHash(sLabel), vSize.x - H::Draw.Scale(45)).c_str());
+		PopFont();
+		SetCursorPos(vPreviewPos + ImVec2(H::Draw.Scale(12), H::Draw.Scale(8)));
+		TextUnformatted(TruncateText(sPreview, vSize.x - H::Draw.Scale(45)).c_str());
+		SetCursorPos(vPreviewPos + ImVec2(vSize.x - H::Draw.Scale(24), H::Draw.Scale(-1)));
+		IconImage(bActive ? ICON_MD_KEYBOARD_ARROW_UP : ICON_MD_KEYBOARD_ARROW_DOWN);
+		EndComboPreview();
+	}
+
+	PopItemWidth();
+	PopStyleVar();
+	SetCursorPos(vOriginalPos);
+	AddRowSize(vOriginalPos, vSize + ImVec2(0, GetStyle().WindowPadding.y));
+	DebugDummy({ vSize.x, GetRowSize(vSize.y + GetStyle().WindowPadding.y) });
+	return bReturn;
+}
+
 void CMenu::DrawMenu()
 {
 	using namespace ImGui;
 
-	if (static bool bSetPosition = false; !bSetPosition)
+	static bool bSetPosition = false;
+	static bool bDraggingMenu = false;
+	static ImVec2 vMenuTargetPos = {};
+	static ImVec2 vMenuAnimPos = {};
+	static ImVec2 vMenuDragOffset = {};
+	ImVec2 vDefaultMenuSize = { H::Draw.Scale(750), H::Draw.Scale(500) };
+	if (!bSetPosition)
 	{
-		SetNextWindowPos((GetIO().DisplaySize - ImVec2(H::Draw.Scale(750), H::Draw.Scale(500))) / 2, ImGuiCond_FirstUseEver);
-		SetNextWindowSize({ H::Draw.Scale(750), H::Draw.Scale(500) }, ImGuiCond_FirstUseEver);
+		vMenuTargetPos = (GetIO().DisplaySize - vDefaultMenuSize) / 2;
+		vMenuAnimPos = vMenuTargetPos;
 		bSetPosition = true;
 	}
+	float flDragDelta = std::clamp(GetIO().DeltaTime * 18.f, 0.f, 1.f);
+	vMenuAnimPos = ImLerp(vMenuAnimPos, vMenuTargetPos, flDragDelta);
+	SetNextWindowPos(vMenuAnimPos, ImGuiCond_Always);
+	SetNextWindowSize(vDefaultMenuSize, ImGuiCond_FirstUseEver);
 
 	PushStyleVar(ImGuiStyleVar_WindowMinSize, { H::Draw.Scale(750), H::Draw.Scale(500) });
-	if (Begin("Main", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground))
+	if (Begin("Main", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoMove))
 	{
 		ImVec2 vWindowSize = GetWindowSize();
 		ImVec2 vDrawPos = GetDrawPos();
+		ImVec2 vMousePos = GetMousePos();
 		auto pDrawList = GetWindowDrawList();
-		float flSize = H::Draw.Scale(140);
 		float flInset = H::Draw.Scale();
-		float flOffset = 0.f;
+		float flNavHeight = H::Draw.Scale(42);
+		float flSubTabHeight = H::Draw.Scale(34);
+		const std::vector<std::vector<const char*>> vSubTabs = {
+			{ "GENERAL", "DRAW" },
+			{ "ESP", "MISC##", "MENU" },
+			{ "MAIN" },
+			{ "MAIN", "BOT", "QUEUEING" },
+			{ "CHEATERS", "DETECTION" },
+			{ "PLAYERLIST", "SETTINGS##", "OUTPUT" },
+			{ "CONFIG", "BINDS", "MATERIALS", "MISC##" }
+		};
+		static int iTab = 0, iAimbotTab = 0, iVisualsTab = 0, iHvHTab = 0, iMiscTab = 0, iAnticheatTab = 0, iLogsTab = 0, iSettingsTab = 0;
+		bool bHasSubTabs = !vSubTabs[iTab].empty();
+		float flHeaderHeight = flNavHeight + (bHasSubTabs ? flSubTabHeight : 0.f);
+		float flBrandWidth = H::Draw.Scale(140);
+		float flSearchWidth = H::Draw.Scale(150);
 
 		Bind_t tBind;
 		if (!F::Binds.GetBind(CurrentBind, &tBind))
 			CurrentBind = DEFAULT_BIND;
 
-		if (CurrentBind != DEFAULT_BIND) // bind
-		{
-			flOffset = H::Draw.Scale(60);
-			pDrawList->AddRectFilled(vDrawPos, vDrawPos + ImVec2(flSize, flOffset - flInset), F::Render.Background0, H::Draw.Scale(3), ImDrawFlags_RoundCornersTopLeft);
-			pDrawList->AddRectFilled(vDrawPos + ImVec2(0, flOffset - flInset), vDrawPos + ImVec2(flSize, flOffset), F::Render.Background2);
-			pDrawList->AddRectFilled(vDrawPos + ImVec2(0, flOffset), vDrawPos + ImVec2(flSize, vWindowSize.y), F::Render.Background0, H::Draw.Scale(3), ImDrawFlags_RoundCornersBottomLeft);
+		pDrawList->AddRectFilled(vDrawPos, vDrawPos + ImVec2(vWindowSize.x, vWindowSize.y), F::Render.Background1, H::Draw.Scale(4));
+		pDrawList->AddRectFilled(vDrawPos, vDrawPos + ImVec2(vWindowSize.x, flNavHeight), F::Render.Background0, H::Draw.Scale(4), ImDrawFlags_RoundCornersTop);
+		pDrawList->AddRectFilled(vDrawPos + ImVec2(0, flNavHeight - flInset), vDrawPos + ImVec2(vWindowSize.x, flNavHeight), F::Render.Background2);
+		pDrawList->AddRect(vDrawPos + ImVec2(flInset, flInset), vDrawPos + vWindowSize - ImVec2(flInset, flInset), F::Render.Background2, H::Draw.Scale(4), ImDrawFlags_None, H::Draw.Scale());
 
-			SetCursorPos({ H::Draw.Scale(12), H::Draw.Scale(11) });
-			FText("Editing bind", {}, 0, F::Render.FontRegular);
-			SetCursorPos({ H::Draw.Scale(12), H::Draw.Scale(35) });
+		if (CurrentBind != DEFAULT_BIND)
+		{
+			SetCursorPos({ H::Draw.Scale(12), H::Draw.Scale(6) });
+			FText("editing bind", {}, 0, F::Render.FontRegular);
+			SetCursorPos({ H::Draw.Scale(12), H::Draw.Scale(22) });
 			PushStyleColor(ImGuiCol_Text, F::Render.Accent.Value);
-			FText(TruncateText(tBind.m_sName, flSize - H::Draw.Scale(28)).c_str(), {}, 0, F::Render.FontRegular);
+			FText(TruncateText(tBind.m_sName, flBrandWidth - H::Draw.Scale(46)).c_str(), {}, 0, F::Render.FontRegular);
 			PopStyleColor();
 
-			SetCursorPos({ flSize - H::Draw.Scale(31), H::Draw.Scale(6) });
+			SetCursorPos({ flBrandWidth - H::Draw.Scale(31), H::Draw.Scale(6) });
 			if (IconButton(ICON_MD_CANCEL))
 				CurrentBind = DEFAULT_BIND;
 		}
-		else if (!Vars::Menu::CheatTitle.Value.empty()) // title
+		else if (!Vars::Menu::CheatTitle.Value.empty())
 		{
-			flOffset = H::Draw.Scale(36);
-			pDrawList->AddRectFilled(vDrawPos, vDrawPos + ImVec2(flSize, flOffset - flInset), F::Render.Background0, H::Draw.Scale(3), ImDrawFlags_RoundCornersTopLeft);
-			pDrawList->AddRectFilled(vDrawPos + ImVec2(0, flOffset - flInset), vDrawPos + ImVec2(flSize, flOffset), F::Render.Background2);
-			pDrawList->AddRectFilled(vDrawPos + ImVec2(0, flOffset), vDrawPos + ImVec2(flSize, vWindowSize.y), F::Render.Background0, H::Draw.Scale(3), ImDrawFlags_RoundCornersBottomLeft);
-
-			SetCursorPos({ H::Draw.Scale(12), H::Draw.Scale(11) });
+			SetCursorPos({ H::Draw.Scale(12), H::Draw.Scale(13) });
 			PushStyleColor(ImGuiCol_Text, F::Render.Accent.Value);
-			FText(TruncateText(Vars::Menu::CheatTitle.Value, flSize - H::Draw.Scale(28), F::Render.FontBold).c_str(), {}, 0, F::Render.FontBold);
+			FText(TruncateText(Vars::Menu::CheatTitle.Value, flBrandWidth - H::Draw.Scale(24), F::Render.FontBold).c_str(), {}, 0, F::Render.FontBold);
 			PopStyleColor();
 		}
-		else
-			pDrawList->AddRectFilled(vDrawPos, vDrawPos + ImVec2(flSize, vWindowSize.y), F::Render.Background0, H::Draw.Scale(3), ImDrawFlags_RoundCornersTopLeft | ImDrawFlags_RoundCornersBottomLeft);
-		
-		PushClipRect({ 0, 0 }, { ImGui::GetIO().DisplaySize.x, ImGui::GetIO().DisplaySize.y }, false);
-		RenderTwoToneBackground(flSize, {}, F::Render.Background1, F::Render.Background2, 0.f, false);
-		PopClipRect();
 
-		static int iTab = 0, iAimbotTab = 0, iVisualsTab = 0, iHvHTab = 0, iMiscTab = 0, iAnticheatTab = 0, iLogsTab = 0, iSettingsTab = 0;
 		PushFont(F::Render.FontBold);
 		FTabs(
 			{
-				{ "AIMBOT", "GENERAL" },
-				{ "VISUALS", "ESP", "AIMDRAW", "MISC##", "MENU" },
-				{ "HVH", "MAIN" },
-				{ "MISC", "MAIN", "BOT"},
-				{ "ANTICHEAT", "CHEATERS", "DETECTION" },
-				{ "LOGS", "PLAYERLIST", "SETTINGS##", "OUTPUT" },
-				{ "SETTINGS", "CONFIG", "BINDS", "MATERIALS", "MISC##" }
+				{ "AIMBOT" },
+				{ "VISUALS" },
+				{ "HVH" },
+				{ "MISC" },
+				{ "ANTICHEAT" },
+				{ "LOGS" },
+				{ "SETTINGS" }
 			},
-			{ &iTab, &iAimbotTab, &iVisualsTab, &iHvHTab, &iMiscTab, &iAnticheatTab, &iLogsTab, &iSettingsTab },
-			{ flSize - H::Draw.Scale(16), H::Draw.Scale(36) },
-			{ H::Draw.Scale(8), H::Draw.Scale(8) + flOffset },
-			FTabsEnum::Vertical | FTabsEnum::HorizontalIcons | FTabsEnum::AlignLeft | FTabsEnum::BarLeft,
+			{ &iTab },
+			{ H::Draw.Scale(28), H::Draw.Scale(34) },
+			{ flBrandWidth, H::Draw.Scale(4) },
+			FTabsEnum::Horizontal | FTabsEnum::HorizontalIcons | FTabsEnum::AlignLeft | FTabsEnum::BarBottom | FTabsEnum::Fit,
 			{ { ICON_MD_PERSON }, { ICON_MD_VISIBILITY }, { ICON_MD_SECURITY }, { ICON_MD_ARTICLE }, { ICON_MD_GPP_MAYBE }, { ICON_MD_IMPORT_CONTACTS }, { ICON_MD_SETTINGS } },
 			{ H::Draw.Scale(10), 0 }, {},
-			{}, { H::Draw.Scale(22), 0 }
+			{}, {}, H::Draw.Scale(8), 0.f
 		);
 		PopFont();
 
-		static std::string sSearch = "";
-		SetCursorPos({ H::Draw.Scale(8), vWindowSize.y - H::Draw.Scale(37) });
-		FInputText("Search...", sSearch, H::Draw.Scale(123), ImGuiInputTextFlags_None);
-		bool bSearch = /*IsItemFocused() ||*/ !sSearch.empty();
-		if (!bSearch || FCalcTextSize(sSearch.c_str()).x < 86.f)
+		std::vector<int*> vSubVars = { &iAimbotTab, &iVisualsTab, &iHvHTab, &iMiscTab, &iAnticheatTab, &iLogsTab, &iSettingsTab };
+		if (bHasSubTabs)
 		{
-			SetCursorPos({ H::Draw.Scale(109), vWindowSize.y - H::Draw.Scale(31) });
+			PushFont(F::Render.FontBold);
+			FTabs(
+				vSubTabs[iTab],
+				vSubVars[iTab],
+				{ H::Draw.Scale(24), H::Draw.Scale(24) },
+				{ H::Draw.Scale(18), flNavHeight + H::Draw.Scale(5) },
+				FTabsEnum::Horizontal | FTabsEnum::AlignLeft | FTabsEnum::BarBottom | FTabsEnum::Fit,
+				{}, { H::Draw.Scale(8), 0 }, {}, {}, {}, H::Draw.Scale(16), 0.f
+			);
+			PopFont();
+		}
+
+		static std::string sSearch = "";
+		SetCursorPos({ vWindowSize.x - flSearchWidth - H::Draw.Scale(8), H::Draw.Scale(5) });
+		FInputText("Search...", sSearch, flSearchWidth, ImGuiInputTextFlags_None);
+		bool bSearch = !sSearch.empty();
+		if (!bSearch || FCalcTextSize(sSearch.c_str()).x < flSearchWidth - H::Draw.Scale(37))
+		{
+			SetCursorPos({ vWindowSize.x - H::Draw.Scale(31), H::Draw.Scale(11) });
 			IconImage(ICON_MD_SEARCH);
 		}
-		if (bSearch && IsMouseReleased(ImGuiMouseButton_Left) && IsMouseWithin(vDrawPos.x, vDrawPos.y, H::Draw.Scale(140), vWindowSize.y - H::Draw.Scale(45)))
+		if (bSearch && IsMouseReleased(ImGuiMouseButton_Left) && IsMouseWithin(vDrawPos.x, vDrawPos.y + flHeaderHeight, vWindowSize.x, vWindowSize.y - flHeaderHeight))
 			sSearch = "";
 
-		SetCursorPos({ flSize, 0 });
+		if (!IsMouseDown(ImGuiMouseButton_Left))
+			bDraggingMenu = false;
+		if (bDraggingMenu)
+			vMenuTargetPos = vMousePos - vMenuDragOffset;
+		bool bCanDragMenu = IsMouseWithin(vDrawPos.x, vDrawPos.y, vWindowSize.x, flNavHeight) && !IsAnyItemHovered() && !IsAnyItemActive() && !IsPopupOpen(nullptr, ImGuiPopupFlags_AnyPopupId);
+		if (bCanDragMenu && IsMouseClicked(ImGuiMouseButton_Left))
+		{
+			bDraggingMenu = true;
+			vMenuDragOffset = vMousePos - vMenuTargetPos;
+		}
+
 		PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
 		PushStyleVar(ImGuiStyleVar_WindowPadding, { H::Draw.Scale(8), H::Draw.Scale(8) });
-		if (BeginChild("Page", { vWindowSize.x - flSize, vWindowSize.y }, ImGuiChildFlags_AlwaysUseWindowPadding))
+		SetCursorPos({ 0, flHeaderHeight });
+		if (BeginChild("Page", { vWindowSize.x, vWindowSize.y - flHeaderHeight }, ImGuiChildFlags_AlwaysUseWindowPadding))
 		{
 			if (!bSearch)
 			{
 				switch (iTab)
 				{
 				case 0: MenuAimbot(iAimbotTab); break;
-				case 1: MenuVisuals(iVisualsTab); break;
+				case 1: MenuVisuals(iVisualsTab >= 1 ? iVisualsTab + 1 : iVisualsTab); break;
 				case 2: MenuHvH(iHvHTab); break;
 				case 3: MenuMisc(iMiscTab); break;
 				case 4: MenuAnticheat(iAnticheatTab); break;
@@ -411,7 +552,7 @@ void CMenu::MenuAimbot(int iTab)
 					PushTransparent(!Vars::Aimbot::Healing::AutoArrow.Value);
 					{
 						FToggleSlider(Vars::Aimbot::Healing::AutoSwitch, Vars::Aimbot::Healing::AutoSwitchHealth);
-						FTooltip("Automatically switch to crossbow and heal if target has less hp than max and has resistance or invulnerability or medigun does not have enough charges.\nThe slider controls how much less hp the target should have from max amount.");
+						FTooltip("Automatically switch to crossbow and heal if target is below the selected health percent and has resistance or invulnerability or medigun does not have enough charges.");
 					}
 					PopTransparent();
 				} EndSection();
@@ -625,6 +766,11 @@ void CMenu::MenuAimbot(int iTab)
 		}
 		break;
 	}
+	case 1:
+	{
+		MenuVisuals(1);
+		break;
+	}
 	}
 }
 
@@ -709,7 +855,7 @@ void CMenu::MenuVisuals(int iTab)
 				// background
 				float flWidth = GetWindowWidth() / 2 - GetStyle().WindowPadding.x * 1.5f;
 				float flHeight = H::Draw.Scale(28);
-				ImColor tColor = ColorToVec(tGroup.m_tColor.Lerp(Vars::Menu::Theme::Background.Value, 0.5f, LerpEnum::NoAlpha));
+				ImColor tColor = ColorByteToFloat(tGroup.m_tColor.Lerp(Vars::Menu::Theme::Background.Value, 0.5f, LerpEnum::NoAlpha));
 				ImVec2 vDrawPos = GetDrawPos() + vOriginalPos;
 				if (iCurrentGroup != iGroup)
 					GetWindowDrawList()->AddRectFilled(vDrawPos, vDrawPos + ImVec2(flWidth, flHeight), tColor, H::Draw.Scale(4));
@@ -718,7 +864,7 @@ void CMenu::MenuVisuals(int iTab)
 					ImColor tColor2 = { tColor.Value.x * 1.1f, tColor.Value.y * 1.1f, tColor.Value.z * 1.1f, tColor.Value.w };
 					GetWindowDrawList()->AddRectFilled(vDrawPos, vDrawPos + ImVec2(flWidth, flHeight), tColor2, H::Draw.Scale(4));
 
-					tColor2 = ColorToVec(tGroup.m_tColor.Lerp(Vars::Menu::Theme::Background.Value, 0.25f, LerpEnum::NoAlpha));
+					tColor2 = ColorByteToFloat(tGroup.m_tColor.Lerp(Vars::Menu::Theme::Background.Value, 0.25f, LerpEnum::NoAlpha));
 					float flInset = H::Draw.Scale(0.5f) - 0.5f;
 					GetWindowDrawList()->AddRect(vDrawPos + ImVec2(flInset, flInset), vDrawPos + ImVec2(flWidth - flInset, flHeight - flInset), tColor2, H::Draw.Scale(4), ImDrawFlags_None, H::Draw.Scale());
 				}
@@ -816,6 +962,7 @@ void CMenu::MenuVisuals(int iTab)
 					Divider(H::Draw.Scale(), H::Draw.Scale(8), -H::Draw.Scale());
 					PushTransparent(!(tGroup.m_iTargets & TargetsEnum::Players));
 					{
+						RoleDropdown("Roles", tGroup.m_vRoles);
 						FDropdown("Players", &tGroup.m_iPlayers, { "Scout", "Soldier", "Pyro", "Demoman", "Heavy", "Engineer", "Medic", "Sniper", "Spy", "##Divider", "Invulnerable", "Crits", (tGroup.m_iPlayers & PlayerEnum::NotInvis) ? "Not invisible" : "Invisible", "Disguise", "Hurt", "##Divider", "Invisible -> Not invisible" }, {}, FDropdownEnum::Multi, 0, "All");
 					}
 					PopTransparent();
@@ -941,10 +1088,8 @@ void CMenu::MenuVisuals(int iTab)
 					{
 						FDropdown("##Draw", &tGroup.m_iBacktrack, { "Last", "First", "##Divider", "Always" }, { BacktrackEnum::Last, BacktrackEnum::First, BacktrackEnum::Always }, FDropdownEnum::Multi | FDropdownEnum::NoSanitization, 0, "All");
 
-						FMDropdown("Material", &tGroup.m_vBacktrackChams, FDropdownEnum::Left);
-						SetCursorPos({ GetWindowWidth() / 2 + GetStyle().WindowPadding.x / 2, GetCursorPosY() - H::Draw.Scale(32) });
-
-						FToggle("Materials ignore Z", &tGroup.m_iBacktrack, BacktrackEnum::IgnoreZ, FToggleEnum::Left);
+						FMDropdown("Visible material", &tGroup.m_tBacktrackChams.Visible, FDropdownEnum::Left);
+						FMDropdown("Occluded material", &tGroup.m_tBacktrackChams.Occluded, FDropdownEnum::Right);
 
 						SetCursorPosY(GetCursorPosY() + H::Draw.Scale(8));
 						PushTransparent(!tGroup.m_tBacktrackGlow.Stencil);
@@ -1671,19 +1816,25 @@ void CMenu::MenuMisc(int iTab)
 					FToggle(Vars::Misc::Exploits::CheatsBypass, FToggleEnum::Right);
 					FToggle(Vars::Misc::Exploits::UnlockCVars, FToggleEnum::Left);
 					FToggle(Vars::Misc::Exploits::EquipRegionUnlock, FToggleEnum::Right);
-					FToggle(Vars::Misc::Exploits::PremiumCraftingBypass, FToggleEnum::Left);
 					FToggle(Vars::Misc::Exploits::BackpackExpander, FToggleEnum::Left);
 					FToggle(Vars::Misc::Exploits::BreakShootSound, FToggleEnum::Right);
 					FTooltip("breaks weapon shoot sound by switching weapons (soldier only)");
 					FToggleSlider(Vars::Misc::Exploits::PingReducer, Vars::Misc::Exploits::PingTarget);
 				} EndSection();
-				if (Section("Mann vs. Machine", 8))
+				if (Section("Mann vs. Machine", 14))
 				{
 					FToggle(Vars::Misc::MannVsMachine::InstantRespawn, FToggleEnum::Left);
 					FToggle(Vars::Misc::MannVsMachine::InstantRevive, FToggleEnum::Right);
 					FToggle(Vars::Misc::MannVsMachine::AllowInspect, FToggleEnum::Left);
 					FToggle(Vars::Misc::MannVsMachine::AutoMvmReadyUp, FToggleEnum::Right);
+					FToggle(Vars::Misc::MannVsMachine::AutoAbandonMannUp, FToggleEnum::Left);
 					FToggleSlider(Vars::Misc::MannVsMachine::BuyBot, Vars::Misc::MannVsMachine::MaxCash);
+					FToggle(Vars::Misc::MannVsMachine::BuyBotAutoClass, FToggleEnum::Left);
+					PushTransparent(!Vars::Misc::MannVsMachine::BuyBotAutoClass.Value);
+					{
+						FDropdown(Vars::Misc::MannVsMachine::BuyBotClass, { "Scout", "Soldier", "Pyro", "Demoman", "Heavy", "Engineer", "Sniper", "Spy" }, { 1, 3, 7, 4, 6, 9, 2, 8 }, FDropdownEnum::Right);
+					}
+					PopTransparent();
 					FTooltip("WARNING: Works only on Mann Up missions with enough starting cash (600$) before the 1st wave!\nRequirements:\n1. Be a Vaccinator Medic\n2. Ping must be below 80ms\n3. Walk to the upgrade station\nPerforms MVM upgrade station exploit for extra cash.");
 				} EndSection();
 			}
@@ -1801,42 +1952,6 @@ void CMenu::MenuMisc(int iTab)
 					}
 					PopTransparent();
 				} EndSection();
-				if (Section("Navbot"))
-				{
-					PushTransparent(!Vars::Misc::Movement::NavEngine::Enabled.Value);
-					{
-						FToggle(Vars::Misc::Movement::NavBot::Enabled, FToggleEnum::Left);
-						PushTransparent(!Vars::Misc::Movement::NavBot::Enabled.Value || !Vars::Misc::Movement::NavEngine::Enabled.Value);
-						{
-							FDropdown(Vars::Misc::Movement::NavBot::RechargeDT);
-							PushTransparent(Transparent || !Vars::Misc::Movement::NavBot::RechargeDT.Value);
-								FSlider(Vars::Misc::Movement::NavBot::RechargeDTDelay, FSliderEnum::None);
-							PopTransparent();
-							FDropdown(Vars::Misc::Movement::NavBot::Preferences);
-							FDropdown(Vars::Misc::Movement::NavBot::Blacklist);
-							PushTransparent(Transparent || !(Vars::Misc::Movement::NavBot::Blacklist.Value & Vars::Misc::Movement::NavBot::BlacklistEnum::NormalThreats));
-							{
-								FSlider(Vars::Misc::Movement::NavBot::BlacklistDelay, FSliderEnum::Left);
-							}
-							PopTransparent();
-							PushTransparent(Transparent || !(Vars::Misc::Movement::NavBot::Blacklist.Value & Vars::Misc::Movement::NavBot::BlacklistEnum::DormantThreats));
-							{
-								FSlider(Vars::Misc::Movement::NavBot::BlacklistDormantDelay, FSliderEnum::Right);
-							}
-							PopTransparent();
-							PushTransparent(Transparent || !(Vars::Misc::Movement::NavBot::Blacklist.Value & Vars::Misc::Movement::NavBot::BlacklistEnum::NormalThreats)
-											&& !(Vars::Misc::Movement::NavBot::Blacklist.Value & Vars::Misc::Movement::NavBot::BlacklistEnum::DormantThreats));
-							{
-								FSlider(Vars::Misc::Movement::NavBot::BlacklistSlightDangerLimit);
-							}
-							PopTransparent();
-							FSlider(Vars::Misc::Movement::NavBot::MeleeTargetRange);
-							FToggleSlider(Vars::Misc::Movement::NavBot::DangerOverlay, Vars::Misc::Movement::NavBot::DangerOverlayMaxDist);
-						}
-						PopTransparent();
-					}
-					PopTransparent();
-				} EndSection();
 				if (Section("Followbot"))
 				{
 					FToggle(Vars::Misc::Movement::FollowBot::Enabled);
@@ -1845,9 +1960,10 @@ void CMenu::MenuMisc(int iTab)
 						FTooltip("Use nav engine when unable to reach current target.\nNormal - runs in case the target is NOT dormant\nNormal + Dormant - runs regardless of dormancy\nNOTE:\n'+ Dormant' does not make the followbot target players across the whole map. \nIt only prevents followbot from losing current target in case it goes dormant");
 					PopTransparent();
 					FDropdown(Vars::Misc::Movement::FollowBot::Targets, FDropdownEnum::Right);
-					FDropdown(Vars::Misc::Movement::FollowBot::LookAtPath, FDropdownEnum::Left);
+					FDropdown(Vars::Misc::Movement::FollowBot::Prefer, FDropdownEnum::Left);
+					FDropdown(Vars::Misc::Movement::FollowBot::LookAtPath, FDropdownEnum::Right);
 					PushTransparent(!Vars::Misc::Movement::FollowBot::LookAtPath.Value);
-						FDropdown(Vars::Misc::Movement::FollowBot::LookAtPathMode, FDropdownEnum::Right);
+						FDropdown(Vars::Misc::Movement::FollowBot::LookAtPathMode, FDropdownEnum::Left);
 						FTooltip("Look at path mode:\nPath - look at current path node.\nCopy - use saved target viewangles.\nCopy immediate - use current target viewangles.\nAt target - look at current target.");
 						FToggle(Vars::Misc::Movement::FollowBot::LookAtPathNoSnap);
 					PopTransparent();
@@ -1922,55 +2038,47 @@ void CMenu::MenuMisc(int iTab)
 						}
 					} EndSection();
 				}
+				if (Section("Navbot"))
+				{
+					PushTransparent(!Vars::Misc::Movement::NavEngine::Enabled.Value);
+					{
+						FToggle(Vars::Misc::Movement::NavBot::Enabled, FToggleEnum::Left);
+						PushTransparent(!Vars::Misc::Movement::NavBot::Enabled.Value || !Vars::Misc::Movement::NavEngine::Enabled.Value);
+						{
+							FDropdown(Vars::Misc::Movement::NavBot::RechargeDT);
+							PushTransparent(Transparent || !Vars::Misc::Movement::NavBot::RechargeDT.Value);
+								FSlider(Vars::Misc::Movement::NavBot::RechargeDTDelay, FSliderEnum::None);
+							PopTransparent();
+							FDropdown(Vars::Misc::Movement::NavBot::Preferences);
+							FDropdown(Vars::Misc::Movement::NavBot::Blacklist);
+							PushTransparent(Transparent || !(Vars::Misc::Movement::NavBot::Blacklist.Value & Vars::Misc::Movement::NavBot::BlacklistEnum::NormalThreats));
+							{
+								FSlider(Vars::Misc::Movement::NavBot::BlacklistDelay, FSliderEnum::Left);
+							}
+							PopTransparent();
+							PushTransparent(Transparent || !(Vars::Misc::Movement::NavBot::Blacklist.Value & Vars::Misc::Movement::NavBot::BlacklistEnum::DormantThreats));
+							{
+								FSlider(Vars::Misc::Movement::NavBot::BlacklistDormantDelay, FSliderEnum::Right);
+							}
+							PopTransparent();
+							PushTransparent(Transparent || !(Vars::Misc::Movement::NavBot::Blacklist.Value & Vars::Misc::Movement::NavBot::BlacklistEnum::NormalThreats)
+											&& !(Vars::Misc::Movement::NavBot::Blacklist.Value & Vars::Misc::Movement::NavBot::BlacklistEnum::DormantThreats));
+							{
+								FSlider(Vars::Misc::Movement::NavBot::BlacklistSlightDangerLimit);
+							}
+							PopTransparent();
+							FSlider(Vars::Misc::Movement::NavBot::MeleeTargetRange);
+							FToggleSlider(Vars::Misc::Movement::NavBot::DangerOverlay, Vars::Misc::Movement::NavBot::DangerOverlayMaxDist);
+						}
+						PopTransparent();
+					}
+					PopTransparent();
+				} EndSection();
 			}
 
 			/* Column 2 */
 			TableNextColumn();
 			{
-				if (Section("Queueing", 8))
-				{
-					FDropdown(Vars::Misc::Queueing::ForceRegions, FDropdownEnum::Left);
-					FDropdown(Vars::Misc::Queueing::ExtendQueue, FDropdownEnum::Right);
-					FToggle(Vars::Misc::Queueing::AutoCasualQueue, FToggleEnum::Left);
-					FToggle(Vars::Misc::Queueing::AutoCasualJoin, FToggleEnum::Right);
-					FToggle(Vars::Misc::Queueing::AutoCompetitiveQueue, FToggleEnum::Left);
-					FToggle(Vars::Misc::Queueing::MapPopularizing, FToggleEnum::Right);
-		            FToggle(Vars::Misc::Queueing::AutoMannUpQueue, FToggleEnum::Left);
-					FToggle(Vars::Misc::Queueing::MapBarBoost, FToggleEnum::Right);
-					PushTransparent(!Vars::Misc::Queueing::AutoCasualQueue.Value);
-					{
-						FToggle(Vars::Misc::Queueing::AutoAbandonIfNoNavmesh);
-						FToggleSlider(Vars::Misc::Queueing::AutoDumpProfiles, Vars::Misc::Queueing::AutoDumpDelay);
-					}
-					PopTransparent();
-					FSlider(Vars::Misc::Queueing::QueueDelay, FSliderEnum::None);
-					FToggle(Vars::Misc::Queueing::RQif, FToggleEnum::Left);
-					PushTransparent(!Vars::Misc::Queueing::RQif.Value);
-					{
-						FSlider(Vars::Misc::Queueing::RQplt);
-						FSlider(Vars::Misc::Queueing::RQpgt);
-						FToggle(Vars::Misc::Queueing::RQkick, FToggleEnum::Left);
-						FToggle(Vars::Misc::Queueing::RQnoAbandon, FToggleEnum::Right);
-						FToggle(Vars::Misc::Queueing::RQIgnoreFriends, FToggleEnum::Left);
-						FToggle(Vars::Misc::Queueing::RQLTM, FToggleEnum::Right);
-					}
-					PopTransparent();
-
-					FToggle(Vars::Misc::Queueing::AutoCommunityQueue, FToggleEnum::Left);
-					PushTransparent(!Vars::Misc::Queueing::AutoCommunityQueue.Value);
-					{
-						FSlider(Vars::Misc::Queueing::ServerSearchDelay, FSliderEnum::Left);
-						FSlider(Vars::Misc::Queueing::MaxTimeOnServer, FSliderEnum::Right);
-						FSlider(Vars::Misc::Queueing::MinPlayersOnServer, FSliderEnum::Left);
-						FSlider(Vars::Misc::Queueing::MaxPlayersOnServer, FSliderEnum::Right);
-						FToggle(Vars::Misc::Queueing::RequireNavmesh, FToggleEnum::Left);
-						FToggle(Vars::Misc::Queueing::AvoidPasswordServers, FToggleEnum::Right);
-						FToggle(Vars::Misc::Queueing::OnlyNonDedicatedServers, FToggleEnum::Left);
-						FToggle(Vars::Misc::Queueing::OnlySteamNetworkingIPs, FToggleEnum::Right);
-						FToggle(Vars::Misc::Queueing::PreferSteamNickServers, FToggleEnum::Left);
-					}
-					PopTransparent();
-				} EndSection();
 				if (Section("Auto-Item"))
 				{
 					FDropdown(Vars::Misc::Automation::AutoItem::Enable);
@@ -1993,7 +2101,6 @@ void CMenu::MenuMisc(int iTab)
 					}
 					PopTransparent();
 					FToggle(Vars::Misc::Automation::ChatSpam::AutoReply, FToggleEnum::Left);
-					FToggle(Vars::Misc::Automation::ChatSpam::ChatRelay, FToggleEnum::Right);
 					FToggle(Vars::Misc::Automation::ChatSpam::VoteKickReply, FToggleEnum::Left);
 					FToggleSlider(Vars::Misc::Automation::KillSay::Enable, Vars::Misc::Automation::KillSay::Chance);
 					PushTransparent(!Vars::Misc::Automation::KillSay::Enable.Value);
@@ -2003,6 +2110,7 @@ void CMenu::MenuMisc(int iTab)
 					PopTransparent();
 					FDropdown(Vars::Misc::Automation::VoiceCommandSpam);
 					FToggle(Vars::Misc::Automation::Micspam, FToggleEnum::Left);
+#if 0
 					FToggle(Vars::Misc::Automation::AchievementSpam, FToggleEnum::Right);
 					PushTransparent(!Vars::Misc::Automation::AchievementSpam.Value);
 					{
@@ -2012,12 +2120,83 @@ void CMenu::MenuMisc(int iTab)
 							Vars::Misc::Automation::GetAchievementSpamDropdownIDs());
 					}
 					PopTransparent();
+#endif
 					FToggle(Vars::Misc::Automation::NoiseSpam, FToggleEnum::Left);
 					FToggle(Vars::Misc::Automation::CallVoteSpam, FToggleEnum::Right);
 					// if (FButton("HELP", FButtonEnum::Left, { 0, 24 }))
 					// 	ShellExecuteA(NULL, "open", (F::Configs.m_sConfigPath + "chathelp.txt").c_str(), NULL, NULL, SW_SHOWNORMAL);
 					// if (FButton("OPEN FOLDER", FButtonEnum::Right, { 0, 24 }, 0, nullptr, nullptr))
 					// 	ShellExecuteA(NULL, "open", F::Configs.m_sConfigPath.c_str(), NULL, NULL, SW_SHOWNORMAL);
+				} EndSection();
+			}
+			EndTable();
+		}
+		break;
+	}
+	case 2:
+	{
+		if (BeginTable("QueueingTable", 2))
+		{
+			TableNextColumn();
+			{
+				if (Section("Matchmaking"))
+				{
+					FToggle(Vars::Misc::Queueing::AutoCasualQueue, FToggleEnum::Left);
+					FToggle(Vars::Misc::Queueing::AutoCasualJoin, FToggleEnum::Right);
+					FToggle(Vars::Misc::Queueing::AutoCompetitiveQueue, FToggleEnum::Left);
+					FToggle(Vars::Misc::Queueing::AutoMannUpQueue, FToggleEnum::Right);
+					FSlider(Vars::Misc::Queueing::QueueDelay);
+				} EndSection();
+				if (Section("Casual automation", 8))
+				{
+					FToggle(Vars::Misc::Queueing::MapPopularizing, FToggleEnum::Left);
+					FToggle(Vars::Misc::Queueing::MapBarBoost, FToggleEnum::Right);
+					PushTransparent(!Vars::Misc::Queueing::AutoCasualQueue.Value);
+					{
+						FToggle(Vars::Misc::Queueing::AutoAbandonIfNoNavmesh, FToggleEnum::Left);
+						FToggleSlider(Vars::Misc::Queueing::AutoDumpProfiles, Vars::Misc::Queueing::AutoDumpDelay);
+					}
+					PopTransparent();
+				} EndSection();
+				if (Section("Regions", 8))
+				{
+					FDropdown(Vars::Misc::Queueing::ForceRegions, FDropdownEnum::Left);
+					FDropdown(Vars::Misc::Queueing::ExtendQueue, FDropdownEnum::Right);
+				} EndSection();
+			}
+
+			TableNextColumn();
+			{
+				if (Section("Requeue"))
+				{
+					FToggle(Vars::Misc::Queueing::RQif);
+					PushTransparent(!Vars::Misc::Queueing::RQif.Value);
+					{
+						FSlider(Vars::Misc::Queueing::RQplt, FSliderEnum::Left);
+						FSlider(Vars::Misc::Queueing::RQpgt, FSliderEnum::Right);
+						FToggle(Vars::Misc::Queueing::RQkick, FToggleEnum::Left);
+						FToggle(Vars::Misc::Queueing::RQnoAbandon, FToggleEnum::Right);
+						FToggle(Vars::Misc::Queueing::RQIgnoreFriends, FToggleEnum::Left);
+						FToggle(Vars::Misc::Queueing::RQLTM, FToggleEnum::Right);
+					}
+					PopTransparent();
+				} EndSection();
+				if (Section("Community", 8))
+				{
+					FToggle(Vars::Misc::Queueing::AutoCommunityQueue);
+					PushTransparent(!Vars::Misc::Queueing::AutoCommunityQueue.Value);
+					{
+						FSlider(Vars::Misc::Queueing::ServerSearchDelay, FSliderEnum::Left);
+						FSlider(Vars::Misc::Queueing::MaxTimeOnServer, FSliderEnum::Right);
+						FSlider(Vars::Misc::Queueing::MinPlayersOnServer, FSliderEnum::Left);
+						FSlider(Vars::Misc::Queueing::MaxPlayersOnServer, FSliderEnum::Right);
+						FToggle(Vars::Misc::Queueing::RequireNavmesh, FToggleEnum::Left);
+						FToggle(Vars::Misc::Queueing::AvoidPasswordServers, FToggleEnum::Right);
+						FToggle(Vars::Misc::Queueing::OnlyNonDedicatedServers, FToggleEnum::Left);
+						FToggle(Vars::Misc::Queueing::OnlySteamNetworkingIPs, FToggleEnum::Right);
+						FToggle(Vars::Misc::Queueing::PreferSteamNickServers, FToggleEnum::Left);
+					}
+					PopTransparent();
 				} EndSection();
 			}
 			EndTable();
@@ -2202,9 +2381,9 @@ void CMenu::MenuAnticheat(int iTab)
 							sReason = "tagged by the player";
 						std::string sDetections = tRecord.m_bAuto ? std::format("Detections: {}", std::max(0, tRecord.m_iDetections)) : "Manual tag";
 						const Color_t tCardColor = getReasonColor(tRecord);
-						const ImColor tFillColor = ColorToVec(tCardColor.Lerp(Vars::Menu::Theme::Background.Value, 0.55f, LerpEnum::NoAlpha));
-						const ImColor tBorderColor = ColorToVec(tCardColor);
-						const ImColor tReasonColor = ColorToVec(tCardColor);
+						const ImColor tFillColor = ColorByteToFloat(tCardColor.Lerp(Vars::Menu::Theme::Background.Value, 0.55f, LerpEnum::NoAlpha));
+						const ImColor tBorderColor = ColorByteToFloat(tCardColor);
+						const ImColor tReasonColor = ColorByteToFloat(tCardColor);
 						const ImU32 uFillColor = ImGui::ColorConvertFloat4ToU32(tFillColor.Value);
 						const ImU32 uBorderColor = ImGui::ColorConvertFloat4ToU32(tBorderColor.Value);
 						const ImU32 uReasonColor = ImGui::ColorConvertFloat4ToU32(tReasonColor.Value);
@@ -2230,7 +2409,7 @@ void CMenu::MenuAnticheat(int iTab)
 						{
 							ImVec2 vAvatarDrawPos = GetDrawPos() + vAvatarPos;
 							ImVec2 vAvatarDrawEnd = { vAvatarDrawPos.x + flAvatarSize, vAvatarDrawPos.y + flAvatarSize };
-							const ImColor tAvatarBg = ColorToVec(Vars::Menu::Theme::Background.Value.Lerp(tCardColor, 0.25f, LerpEnum::NoAlpha));
+							const ImColor tAvatarBg = ColorByteToFloat(Vars::Menu::Theme::Background.Value.Lerp(tCardColor, 0.25f, LerpEnum::NoAlpha));
 							pDrawList->AddRectFilled(vAvatarDrawPos, vAvatarDrawEnd, ImGui::ColorConvertFloat4ToU32(tAvatarBg.Value), H::Draw.Scale(4));
 							char cInitial = '?';
 							for (char cChar : sName)
@@ -2289,7 +2468,7 @@ void CMenu::MenuAnticheat(int iTab)
 							PushStyleColor(ImGuiCol_Header, F::Render.Background1.Value);
 
 							const ImVec4 tAccent = F::Render.Accent.Value;
-							const ImVec4 tDanger = ColorToVec(Color_t{ 255, 120, 120, 255 });
+							const ImVec4 tDanger = ColorByteToFloat(Color_t{ 255, 120, 120, 255 });
 							const float flRowHeight = H::Draw.Scale(32);
 							const float flIconSlot = H::Draw.Scale(22);
 							int iPopupRow = 0;
@@ -2552,7 +2731,7 @@ void CMenu::MenuLogs(int iTab)
 					// background
 					float flWidth = GetWindowWidth() / 2 - GetStyle().WindowPadding.x * 1.5f;
 					float flHeight = H::Draw.Scale(28);
-					ImColor tColor = ColorToVec(fGetTeamColor(tPlayer.m_iTeam, tPlayer.m_bAlive));
+					ImColor tColor = ColorByteToFloat(fGetTeamColor(tPlayer.m_iTeam, tPlayer.m_bAlive));
 					ImVec2 vDrawPos = GetDrawPos() + vOriginalPos;
 					GetWindowDrawList()->AddRectFilled(vDrawPos, vDrawPos + ImVec2(flWidth, flHeight), tColor, H::Draw.Scale(4));
 
@@ -2601,14 +2780,14 @@ void CMenu::MenuLogs(int iTab)
 								float flTagOffset = H::Draw.Scale(4);
 								auto fDrawTag = [&](PriorityLabel_t& tTag, int iID)
 								{
-									ImColor tTagColor = ColorToVec(tTag.m_tColor);
+									ImColor tTagColor = ColorByteToFloat(tTag.m_tColor);
 									float flTagWidth = FCalcTextSize(tTag.m_sName.c_str()).x + H::Draw.Scale(!iID ? 10 : 25);
 									float flTagHeight = H::Draw.Scale(20);
 									ImVec2 vTagPos = { flTagOffset, H::Draw.Scale(4) };
 
 									GetWindowDrawList()->AddRectFilled(vDrawPos + vTagPos, vDrawPos + vTagPos + ImVec2(flTagWidth, flTagHeight), tTagColor, H::Draw.Scale(4));
 									SetCursorPos(vTagPos + ImVec2(H::Draw.Scale(5), H::Draw.Scale(3)));
-									TextColored(VecToColor(tColor).Blend(tTag.m_tColor).IsColorBright() ? ImVec4(0, 0, 0, 1) : ImVec4(1, 1, 1, 1), tTag.m_sName.c_str());
+									TextColored(ColorFloatToByte(tColor).Blend(tTag.m_tColor).IsColorBright() ? ImVec4(0, 0, 0, 1) : ImVec4(1, 1, 1, 1), tTag.m_sName.c_str());
 									if (iID)
 									{
 										SetCursorPos(vTagPos + ImVec2(flTagWidth - H::Draw.Scale(22), H::Draw.Scale(-2)));
@@ -2705,10 +2884,10 @@ void CMenu::MenuLogs(int iTab)
 									if (!tTag.m_bAssignable || F::PlayerUtils.HasTag(tPlayer.m_uAccountID, iID))
 										continue;
 
-									auto imColor = ColorToVec(tTag.m_tColor);
-									PushStyleColor(ImGuiCol_Text, imColor);
-									imColor.x /= 3; imColor.y /= 3; imColor.z /= 3;
-									if (FSelectable(tTag.m_sName.c_str(), imColor))
+									ImVec4 tColor = ColorByteToVec(tTag.m_tColor);
+									PushStyleColor(ImGuiCol_Text, tColor);
+									tColor.x /= 3; tColor.y /= 3; tColor.z /= 3;
+									if (FSelectable(tTag.m_sName.c_str(), tColor))
 										F::PlayerUtils.AddTag(tPlayer.m_uAccountID, iID, true, tPlayer.m_sName.c_str());
 									PopStyleColor();
 								}
@@ -2988,7 +3167,7 @@ void CMenu::MenuLogs(int iTab)
 				// background
 				float flWidth = GetWindowWidth() * (_tTag.m_bLabel ? 1.f / 3 : 2.f / 3) - GetStyle().WindowPadding.x * 1.5f;
 				float flHeight = H::Draw.Scale(28);
-				ImColor tColor = ColorToVec(_tTag.m_tColor.Lerp(Vars::Menu::Theme::Background.Value, 0.5f, LerpEnum::NoAlpha));
+				ImColor tColor = ColorByteToFloat(_tTag.m_tColor.Lerp(Vars::Menu::Theme::Background.Value, 0.5f, LerpEnum::NoAlpha));
 				ImVec2 vDrawPos = GetDrawPos() + vOriginalPos;
 				if (iID != _iID)
 					GetWindowDrawList()->AddRectFilled(vDrawPos, vDrawPos + ImVec2(flWidth, flHeight), tColor, H::Draw.Scale(4));
@@ -2996,7 +3175,8 @@ void CMenu::MenuLogs(int iTab)
 				{
 					ImColor tColor2 = { tColor.Value.x * 1.1f, tColor.Value.y * 1.1f, tColor.Value.z * 1.1f, tColor.Value.w };
 					GetWindowDrawList()->AddRectFilled(vDrawPos, vDrawPos + ImVec2(flWidth, flHeight), tColor2, H::Draw.Scale(4));
-					tColor2 = ColorToVec(_tTag.m_tColor.Lerp(Vars::Menu::Theme::Background.Value, 0.25f, LerpEnum::NoAlpha));
+
+					tColor2 = ColorByteToFloat(_tTag.m_tColor.Lerp(Vars::Menu::Theme::Background.Value, 0.25f, LerpEnum::NoAlpha));
 					float flInset = H::Draw.Scale(0.5f) - 0.5f;
 					GetWindowDrawList()->AddRect(vDrawPos + ImVec2(flInset, flInset), vDrawPos + ImVec2(flWidth - flInset, flHeight - flInset), tColor2, H::Draw.Scale(4), ImDrawFlags_None, H::Draw.Scale());
 				}
@@ -3227,8 +3407,8 @@ void CMenu::MenuLogs(int iTab)
 					F::SteamProfileCache.TouchAvatar(tEntry.m_uAccountID);
 
 					const Color_t tCardColor = tEntry.m_tRole.m_tColor;
-					const ImColor tFillColor = ColorToVec(tCardColor.Lerp(Vars::Menu::Theme::Background.Value, 0.55f, LerpEnum::NoAlpha));
-					const ImColor tBorderColor = ColorToVec(tCardColor);
+					const ImColor tFillColor = ColorByteToFloat(tCardColor.Lerp(Vars::Menu::Theme::Background.Value, 0.55f, LerpEnum::NoAlpha));
+					const ImColor tBorderColor = ColorByteToFloat(tCardColor);
 					const ImU32 uFillColor = ImGui::ColorConvertFloat4ToU32(tFillColor.Value);
 					const ImU32 uBorderColor = ImGui::ColorConvertFloat4ToU32(tBorderColor.Value);
 					const float flAvatarSize = H::Draw.Scale(40);
@@ -3253,7 +3433,7 @@ void CMenu::MenuLogs(int iTab)
 					{
 						ImVec2 vAvatarDrawPos = GetDrawPos() + vAvatarPos;
 						ImVec2 vAvatarDrawEnd = { vAvatarDrawPos.x + flAvatarSize, vAvatarDrawPos.y + flAvatarSize };
-						const ImColor tAvatarBg = ColorToVec(Vars::Menu::Theme::Background.Value.Lerp(tCardColor, 0.25f, LerpEnum::NoAlpha));
+						const ImColor tAvatarBg = ColorByteToFloat(Vars::Menu::Theme::Background.Value.Lerp(tCardColor, 0.25f, LerpEnum::NoAlpha));
 						pDrawList->AddRectFilled(vAvatarDrawPos, vAvatarDrawEnd, ImGui::ColorConvertFloat4ToU32(tAvatarBg.Value), H::Draw.Scale(4));
 						char cInitial = '?';
 						for (char cChar : tEntry.m_sDisplayName)
@@ -3277,7 +3457,7 @@ void CMenu::MenuLogs(int iTab)
 					SetCursorPos({ vOriginalPos.x + flTextOffset, vOriginalPos.y + H::Draw.Scale(6) });
 					FText(TruncateText(tEntry.m_sDisplayName, flAvailableWidth, F::Render.FontBold).c_str(), {}, 0, F::Render.FontBold);
 					SetCursorPos({ vOriginalPos.x + flTextOffset, vOriginalPos.y + H::Draw.Scale(24) });
-					PushStyleColor(ImGuiCol_Text, ColorToVec(tCardColor));
+					PushStyleColor(ImGuiCol_Text, ColorByteToVec(tCardColor));
 					FText(TruncateText(std::format("Role: {}", tEntry.m_sRoleName.empty() ? "Unmarked" : tEntry.m_sRoleName), flAvailableWidth).c_str());
 					PopStyleColor();
 					SetCursorPos({ vOriginalPos.x + flTextOffset, vOriginalPos.y + H::Draw.Scale(38) });
@@ -3313,7 +3493,7 @@ void CMenu::MenuLogs(int iTab)
 						PushStyleColor(ImGuiCol_Header, F::Render.Background1.Value);
 
 						const ImVec4 tAccent = F::Render.Accent.Value;
-						const ImVec4 tDanger = ColorToVec(Color_t{ 255, 120, 120, 255 });
+						const ImVec4 tDanger = ColorByteToFloat(Color_t{ 255, 120, 120, 255 });
 						int iPopupRow = 0;
 
 						PushStyleColor(ImGuiCol_Text, F::Render.Inactive.Value);
@@ -3389,7 +3569,7 @@ void CMenu::MenuLogs(int iTab)
 							if (std::find(tEntry.m_vRoleTags.begin(), tEntry.m_vRoleTags.end(), iID) != tEntry.m_vRoleTags.end() && tEntry.m_tRole.m_sName == tTag.m_sName)
 								sLabel += " (current)";
 
-							fPopupSelectable(std::format("MarkedRole{}", tEntry.m_uAccountID), iPopupRow, sLabel, ICON_MD_LABEL, ColorToVec(tTag.m_tColor), [&]
+							fPopupSelectable(std::format("MarkedRole{}", tEntry.m_uAccountID), iPopupRow, sLabel, ICON_MD_LABEL, ColorByteToVec(tTag.m_tColor), [&]
 							{
 								F::PlayerUtils.SetPlayerRole(tEntry.m_uAccountID, iID, true, tEntry.m_sDisplayName.c_str());
 							});
@@ -3445,7 +3625,7 @@ void CMenu::MenuLogs(int iTab)
 						fStream.close();
 
 						SDK::SetClipboard(sString);
-						SDK::Output("Amalgam", "Copied playerlist to clipboard", DEFAULT_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG);
+						SDK::Output("Amalgam", "Copied playerlist to clipboard", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
 					}
 				}
 
@@ -3550,7 +3730,7 @@ void CMenu::MenuLogs(int iTab)
 						}
 						catch (...)
 						{
-							SDK::Output("Amalgam", "Failed to import playerlist", ALTERNATE_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG);
+							SDK::Output("Amalgam", "Failed to import playerlist", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
 						}
 					}
 
@@ -3568,7 +3748,7 @@ void CMenu::MenuLogs(int iTab)
 							auto& iIDTo = mAs[i];
 
 							ImVec2 vOriginalPos = GetCursorPos();
-							PushStyleColor(ImGuiCol_Text, ColorToVec(vTags[i].m_tColor));
+							PushStyleColor(ImGuiCol_Text, ColorByteToInt(vTags[i].m_tColor));
 							SetCursorPos(vOriginalPos + ImVec2(H::Draw.Scale(8), H::Draw.Scale(5)));
 							FText(vTags[i].m_sName.c_str());
 							PopStyleColor();
@@ -3611,7 +3791,7 @@ void CMenu::MenuLogs(int iTab)
 							}
 
 							F::PlayerUtils.m_bSave = true;
-							SDK::Output("Amalgam", "Imported playerlist", DEFAULT_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG);
+							SDK::Output("Amalgam", "Imported playerlist", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
 
 							CloseCurrentPopup();
 						}
@@ -3642,11 +3822,11 @@ void CMenu::MenuLogs(int iTab)
 							F::Configs.m_sCorePath + std::format("Backup{}.json", iBackupCount + 1),
 							std::filesystem::copy_options::overwrite_existing
 						);
-						SDK::Output("Amalgam", "Saved backup playerlist", DEFAULT_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG);
+						SDK::Output("Amalgam", "Saved backup playerlist", INFO_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_INFO);
 					}
 					catch (...)
 					{
-						SDK::Output("Amalgam", "Failed to backup playerlist", ALTERNATE_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG);
+						SDK::Output("Amalgam", "Failed to backup playerlist", ERROR_COLOR, OUTPUT_CONSOLE | OUTPUT_TOAST | OUTPUT_MENU | OUTPUT_DEBUG, ICON_MD_CANCEL);
 					}
 				}
 			}
@@ -3666,7 +3846,8 @@ void CMenu::MenuLogs(int iTab)
 				{
 					FDropdown(Vars::Logging::Logs);
 					FDropdown(Vars::Logging::NotificationPosition);
-					FSlider(Vars::Logging::Lifetime);
+					FSlider(Vars::Logging::NotificationTime);
+					FSlider(Vars::Logging::MaxNotifications);
 				} EndSection();
 				if (Section("Cheat Detection"))
 				{
@@ -3745,62 +3926,47 @@ void CMenu::MenuLogs(int iTab)
 	{
 		if (Section("##Output", false, GetWindowHeight() - GetStyle().WindowPadding.y * 2))
 		{
+			bool bClear = false;
+
 			for (auto& tOutput : m_vOutput)
 			{
 				ImVec2 vOriginalPos = GetCursorPos();
 				size_t iLines = 1;
 
 				float flWidth = GetWindowWidth() - GetStyle().WindowPadding.x * 2;
-				if (tOutput.m_sFunction != "")
+				if (!tOutput.m_sFunction.empty())
 				{
 					float flTitleWidth = 0.f;
 
-					PushStyleColor(ImGuiCol_Text, ColorToVec(tOutput.tAccent));
-
 					auto vWrapped = WrapText(tOutput.m_sFunction, flWidth);
-					for (size_t i = 0; i < vWrapped.size(); i++)
+					if (!vWrapped.empty())
 					{
-						FText(vWrapped[i].c_str());
-						if (i == vWrapped.size() - 1)
-							flTitleWidth = FCalcTextSize(vWrapped[i].c_str()).x + H::Draw.Scale(4);
+						PushStyleColor(ImGuiCol_Text, ColorByteToInt(tOutput.tAccent));
+
+						for (auto& sText : vWrapped)
+							FText(sText.c_str());
+						iLines = vWrapped.size();
+						flTitleWidth = FCalcTextSize(vWrapped.back().c_str()).x + H::Draw.Scale(4);
+
+						PopStyleColor();
 					}
-					iLines = vWrapped.size();
 
-					PopStyleColor();
-
-					vWrapped = WrapText(tOutput.m_sLog, flWidth - flTitleWidth);
+					vWrapped = WrapText(tOutput.m_sLog, { int(flWidth - flTitleWidth), int(flWidth) });
 					if (!vWrapped.empty())
 					{
 						SameLine(flTitleWidth + GetStyle().WindowPadding.x);
-						FText(vWrapped.front().c_str());
-
-						if (vWrapped.size() > 1)
-						{
-							std::string sLog = "";
-							for (size_t i = 1; i < vWrapped.size(); i++)
-							{
-								sLog += vWrapped[i].c_str();
-								if (i != vWrapped.size() - 1)
-									sLog += " ";
-							}
-							vWrapped = WrapText(sLog, flWidth);
-							for (size_t i = 0; i < vWrapped.size(); i++)
-							{
-								FText(vWrapped[i].c_str());
-								if (i == vWrapped.size() - 1)
-									flTitleWidth = FCalcTextSize(vWrapped[i].c_str()).x + H::Draw.Scale(4);
-							}
-							iLines += vWrapped.size();
-						}
+						for (auto& sText : vWrapped)
+							FText(sText.c_str());
+						iLines += vWrapped.size() - 1;
 					}
 				}
 				else
 				{
-					PushStyleColor(ImGuiCol_Text, ColorToVec(tOutput.tAccent));
+					PushStyleColor(ImGuiCol_Text, ColorByteToInt(tOutput.tAccent));
 
 					auto vWrapped = WrapText(tOutput.m_sLog, flWidth);
-					for (size_t i = 0; i < vWrapped.size(); i++)
-						FText(vWrapped[i].c_str());
+					for (auto& sText : vWrapped)
+						FText(sText.c_str());
 					iLines = vWrapped.size();
 
 					PopStyleColor();
@@ -3816,11 +3982,16 @@ void CMenu::MenuLogs(int iTab)
 
 					if (FSelectable("Copy"))
 						SDK::SetClipboard(std::format("{}{}{}", tOutput.m_sFunction, tOutput.m_sFunction != "" ? " " : "", tOutput.m_sLog));
+					if (FSelectable("Clear"))
+						bClear = true;
 
 					PopStyleVar();
 					EndPopup();
 				}
 			}
+
+			if (bClear)
+				m_vOutput.clear();
 		} EndSection();
 		break;
 	}
@@ -4004,10 +4175,6 @@ void CMenu::MenuSettings(int iTab)
 			TableNextColumn();
 			if (Section("Config"))
 			{
-				FToggle(Vars::Config::AutoLoadCheaterConfig, FToggleEnum::Left);
-				FTooltip("Loads cheater.json when a tagged cheater is in match and switches back when none are present.");
-				DebugDummy({ 0, H::Draw.Scale(6) });
-
 				static std::string sStaticName;
 
 				fDrawConfigs(sStaticName);
@@ -4273,7 +4440,7 @@ void CMenu::MenuSettings(int iTab)
 						ImColor tColor = F::Render.Background1p5L;
 						GetWindowDrawList()->AddRectFilled(vDrawPos, vDrawPos + ImVec2(flWidth, flHeight), tColor, H::Draw.Scale(4));
 
-						tColor = ColorToVec((VecToColor(F::Render.Background1p5)).Lerp({ 127, 127, 127 }, 1.f / 9, LerpEnum::NoAlpha));
+						tColor = ColorByteToFloat((ColorFloatToByte(F::Render.Background1p5)).Lerp({ 127, 127, 127 }, 1.f / 9, LerpEnum::NoAlpha));
 						float flInset = H::Draw.Scale(0.5f) - 0.5f;
 						GetWindowDrawList()->AddRect(vDrawPos + ImVec2(flInset, flInset), vDrawPos + ImVec2(flWidth - flInset, flHeight - flInset), tColor, H::Draw.Scale(4), ImDrawFlags_None, H::Draw.Scale());
 					}
@@ -5481,13 +5648,13 @@ void CMenu::Render()
 {
 	using namespace ImGui;
 
-	if (!(ImGui::GetIO().DisplaySize.x > 160.f && ImGui::GetIO().DisplaySize.y > 28.f))
+	if (!(GetIO().DisplaySize.x > 160.f && GetIO().DisplaySize.y > 28.f))
 		return;
 
 	m_bInKeybind = false;
 	if (m_bIsOpen)
 	{
-		for (short iKey = 0; iKey < 256; iKey++)
+		for (short iKey = 1; iKey < 255; iKey++)
 			U::KeyHandler.StoreKey(iKey);
 	}
 	else
@@ -5502,7 +5669,6 @@ void CMenu::Render()
 
 	ProcessDeferredNotifications();
 
-	DrawBinds();
 	if (m_bIsOpen)
 	{
 		DrawNotifications();
@@ -5520,25 +5686,28 @@ void CMenu::Render()
 
 		F::Render.Cursor = GetMouseCursor();
 		m_bWindowHovered = IsWindowHovered(ImGuiHoveredFlags_AnyWindow | ImGuiHoveredFlags_AllowWhenBlockedByPopup | ImGuiHoveredFlags_AllowWhenBlockedByActiveItem);
-		
-		if (!vDisabled.empty())
+
+		if (!DisabledVec.empty())
 		{
 			IM_ASSERT_USER_ERROR(0, "Calling PopDisabled() too little times: stack overflow.");
 			Disabled = false;
-			vDisabled.clear();
+			DisabledVec.clear();
 		}
-		if (!vTransparent.empty())
+		if (!TransparentVec.empty())
 		{
 			IM_ASSERT_USER_ERROR(0, "Calling PopTransparent() too little times: stack overflow.");
 			Transparent = false;
-			vTransparent.clear();
+			TransparentVec.clear();
 		}
 	}
 	else
 	{
-		mActiveMap.clear();
+		ActiveMap.clear();
 		m_bWindowHovered = false;
 	}
+
+	DrawBinds();
+	F::Notifications.Draw();
 	PopFont();
 }
 

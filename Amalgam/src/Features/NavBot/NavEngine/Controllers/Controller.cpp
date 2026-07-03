@@ -5,23 +5,20 @@
 #include "HaarpController/HaarpController.h"
 #include "DoomsdayController/DoomsdayController.h"
 #include "PasstimeController/PasstimeController.h"
-#include <string_view>
+#include "MVMController/MVMController.h"
 
-namespace
+static std::string GetNormalizedLevelName()
 {
-	auto GetNormalizedLevelName() -> std::string
-	{
-		auto sMapName = std::string(I::EngineClient->GetLevelName());
-		size_t nLastSlash = sMapName.find_last_of("/\\");
-		if (nLastSlash != std::string::npos)
-			sMapName = sMapName.substr(nLastSlash + 1);
-		return sMapName;
-	}
+	auto sMapName = std::string(I::EngineClient->GetLevelName());
+	size_t nLastSlash = sMapName.find_last_of("/\\");
+	if (nLastSlash != std::string::npos)
+		sMapName = sMapName.substr(nLastSlash + 1);
+	return sMapName;
+}
 
-	bool MapStartsWith(const std::string& sMapName, std::string_view sPrefix)
-	{
-		return sMapName.find(sPrefix) == 0;
-	}
+static bool MapStartsWith(const std::string& sMapName, std::string_view sPrefix)
+{
+	return sMapName.find(sPrefix) == 0;
 }
 
 ETFGameType GetGameType()
@@ -48,6 +45,10 @@ void CGameObjectiveController::Update()
 	}
 
 	const auto sMapName = GetNormalizedLevelName();
+
+	F::MVMController.Update();
+	if (F::MVMController.IsActive())
+		return;
 
 	if (MapStartsWith(sMapName, "cppl_"))
 	{
@@ -136,4 +137,5 @@ void CGameObjectiveController::Reset()
 	F::PLController.Init();
 	F::CPController.Init();
 	F::PasstimeController.Init();
+	F::MVMController.Reset();
 }

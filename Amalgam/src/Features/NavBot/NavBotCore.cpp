@@ -5,11 +5,13 @@
 #include "NavEngine/NavEngine.h"
 #include "NavBotJobs/NavBotJobs.h"
 #include "NavRuntime.h"
+#include "NavEngine/Controllers/MVMController/MVMController.h"
 #include "../FollowBot/FollowBot.h"
 #include "../CritHack/CritHack.h"
 #include "../Misc/Misc.h"
 #include "../PacketManip/FakeLag/FakeLag.h"
 #include "../Ticks/Ticks.h"
+#include "../ImGui/IndicatorPanel.h"
 
 
 void CNavBotCore::UpdateSlot(CTFPlayer* pLocal, ClosestEnemy_t tClosestEnemy)
@@ -117,7 +119,7 @@ void CNavBotCore::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 	{
 		if (F::NavEngine.IsPathing())
 			F::NavEngine.CancelPath();
-		
+
 		ResetRuntimeState(pCmd);
 		return;
 	}
@@ -209,14 +211,14 @@ void CNavBotCore::Run(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CUserCmd* pCmd)
 	UpdateSlot(pLocal, F::BotUtils.m_tClosestEnemy);
 	F::Hazards.Update(pLocal);
 
-	// TODO:
-	// Add engie logic and target sentries logic. (Done)
-	// Also maybe add some spy sapper logic? (No.)
-	// Fix defend and help capture logic
-	// Fix reload stuff because its really janky
-	// Finish auto wewapon stuff
-	// Make a better closest enemy logic
-	// Fix dormant player blacklist not actually running
+	if (F::MVMController.IsActive() && F::MVMController.Run(pCmd, pLocal, pWeapon))
+	{
+		m_tIdleTimer.Update();
+		m_tAntiStuckTimer.Update();
+		UpdateRunReloadInput(pCmd, false);
+		F::CritHack.m_bForce = F::NavEngine.m_eCurrentPriority == PriorityListEnum::MVMTank || F::NavEngine.m_eCurrentPriority == PriorityListEnum::MVMCombat;
+		return;
+	}
 
 	const auto tJobResult = m_tJobSystem.Run(pCmd, pLocal, pWeapon);
 
@@ -302,7 +304,216 @@ void CNavBotCore::Reset()
 	m_flNextIdleTime = SDK::RandomFloat(4.f, 10.f);
 }
 
+static std::wstring BuildJobLabel()
+{
+	switch (F::NavEngine.m_eCurrentPriority)
+	{
+	case PriorityListEnum::Patrol:
+	{
+		auto s_job = F::NavBotRoam.m_bDefending ? std::wstring(L"Defend") : std::wstring(L"Patrol");
+		if (F::NavBotRoam.m_bDefending && !F::NavBotCapture.m_sCaptureStatus.empty())
+		{
+			s_job += L" (";
+			s_job += F::NavBotCapture.m_sCaptureStatus;
+			s_job += L')';
+		}
+		return s_job;
+	}
+	case PriorityListEnum::LowPrioGetHealth:
+		return L"Get health (Low-Prio)";
+	case PriorityListEnum::StayNear:
+		return std::format(L"Stalk enemy ({})", F::NavBotStayNear.m_sFollowTargetName.data());
+	case PriorityListEnum::RunReload:
+		return L"Run reload";
+	case PriorityListEnum::RunSafeReload:
+		return L"Run safe reload";
+	case PriorityListEnum::SnipeSentry:
+		return L"Snipe sentry";
+	case PriorityListEnum::GetAmmo:
+		return L"Get ammo";
+	case PriorityListEnum::Capture:
+	{
+		auto s_job = std::wstring(L"Capture");
+		if (!F::NavBotCapture.m_sCaptureStatus.empty())
+		{
+			s_job += L" (";
+			s_job += F::NavBotCapture.m_sCaptureStatus;
+			s_job += L')';
+		}
+		return s_job;
+	}
+	case PriorityListEnum::MeleeAttack:
+		return L"Melee";
+	case PriorityListEnum::Engineer:
+	{
+		std::wstring s_job = L"Engineer (";
+		switch (F::NavBotEngineer.m_eTaskStage)
+		{
+		case EngineerTaskStageEnum::BuildSentry:
+			s_job += L"Build sentry";
+			break;
+		case EngineerTaskStageEnum::BuildDispenser:
+			s_job += L"Build dispenser";
+			break;
+		case EngineerTaskStageEnum::SmackSentry:
+			s_job += L"Smack sentry";
+			break;
+		case EngineerTaskStageEnum::SmackDispenser:
+			s_job += L"Smack dispenser";
+			break;
+		default:
+			s_job += L"None";
+			break;
+		}
+		s_job += L')';
+		return s_job;
+	}
+	case PriorityListEnum::GetHealth:
+		return L"Get health";
+	case PriorityListEnum::EscapeSpawn:
+		return L"Escape spawn";
+	case PriorityListEnum::EscapeDanger:
+		return L"Escape danger";
+	case PriorityListEnum::Followbot:
+		return L"FollowBot";
+	case PriorityListEnum::MVMTank:
+		return L"MvM tank";
+	case PriorityListEnum::MVMCombat:
+		return L"MvM combat";
+	case PriorityListEnum::MVMMoney:
+		return L"MvM money";
+	case PriorityListEnum::MVMFrontline:
+		return L"MvM frontline";
+	default:
+		return L"None";
+	}
+}
+
 void CNavBotCore::Draw(CTFPlayer* pLocal)
 {
-	NavBotDebug::Draw(pLocal);
+	if (!pLocal || !(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::NavBot) || !pLocal->IsAlive())
+		return;
+
+	const bool b_is_ready = F::NavEngine.IsReady();
+	if (!Vars::Debug::Info.Value && !b_is_ready)
+		return;
+
+	int x = Vars::Menu::NavBotDisplay.Value.x;
+	int y = Vars::Menu::NavBotDisplay.Value.y + 8;
+	const auto& f_font = H::Fonts.GetFont(FONT_INDICATORS);
+	const int n_tall = f_font.m_nTall + H::Draw.Scale(1);
+	ImDrawList* p_draw_list = ImGui::GetForegroundDrawList();
+
+	EAlign e_align = ALIGN_TOP;
+	if (x <= 100 + H::Draw.Scale(50, Scale_Round))
+	{
+		x -= H::Draw.Scale(42, Scale_Round);
+		e_align = ALIGN_TOPLEFT;
+	}
+	else if (x >= H::Draw.m_nScreenW - 100 - H::Draw.Scale(50, Scale_Round))
+	{
+		x += H::Draw.Scale(42, Scale_Round);
+		e_align = ALIGN_TOPRIGHT;
+	}
+
+	const auto& t_color = F::NavEngine.IsPathing() ? Vars::Menu::Theme::Active.Value : Vars::Menu::Theme::Inactive.Value;
+	const auto& t_ready_color = b_is_ready ? Vars::Menu::Theme::Active.Value : Vars::Menu::Theme::Inactive.Value;
+	int i_in_spawn = -1;
+	int i_area_flags = -1;
+	if (F::NavEngine.IsNavMeshLoaded())
+	{
+		if (auto pLocalArea = F::NavEngine.GetLocalNavArea())
+		{
+			i_area_flags = pLocalArea->m_iTFAttributeFlags;
+			i_in_spawn = i_area_flags & (TF_NAV_SPAWN_ROOM_BLUE | TF_NAV_SPAWN_ROOM_RED);
+		}
+	}
+
+	const auto s_job = BuildJobLabel();
+	DrawIndicatorText(
+		p_draw_list,
+		x,
+		y,
+		t_color,
+		Vars::Menu::Theme::Background.Value,
+		e_align,
+		std::format("Job: {} {}", SDK::ConvertWideToUTF8(s_job), F::CritHack.m_bForce ? "(Crithack on)" : ""));
+
+	if (F::NavEngine.IsPathing())
+	{
+		auto p_crumbs = F::NavEngine.GetCrumbs();
+		const float fl_dist = pLocal->GetAbsOrigin().DistTo(F::NavEngine.m_vLastDestination);
+		DrawIndicatorText(p_draw_list, x, y += n_tall, t_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Nodes: {} (Dist: {:.0f})", p_crumbs->size(), fl_dist));
+	}
+
+	const float fl_idle_time = SDK::PlatFloatTime() - F::NavBotCore.m_tIdleTimer.GetLastUpdate();
+	if (fl_idle_time > 2.0f && F::NavEngine.IsPathing())
+		DrawIndicatorText(p_draw_list, x, y += n_tall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, e_align, std::format("Stuck: {:.1f}s", fl_idle_time));
+
+	if (!F::NavEngine.IsPathing() && !F::NavEngine.m_sLastFailureReason.empty())
+		DrawIndicatorText(p_draw_list, x, y += n_tall, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, e_align, std::format("Failed: {}", F::NavEngine.m_sLastFailureReason));
+
+	if (!Vars::Debug::Info.Value)
+		return;
+
+	DrawIndicatorText(p_draw_list, x, y += n_tall, t_ready_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Is ready: {}", std::to_string(b_is_ready)));
+	DrawIndicatorText(p_draw_list, x, y += n_tall, t_ready_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Priority: {}", static_cast<int>(F::NavEngine.m_eCurrentPriority)));
+	DrawIndicatorText(p_draw_list, x, y += n_tall, t_ready_color, Vars::Menu::Theme::Background.Value, e_align, std::format("In spawn: {}", std::to_string(i_in_spawn)));
+	DrawIndicatorText(p_draw_list, x, y += n_tall, t_ready_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Area flags: {}", std::to_string(i_area_flags)));
+
+	if (F::NavEngine.IsNavMeshLoaded())
+	{
+		DrawIndicatorText(p_draw_list, x, y += n_tall, t_ready_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Map: {}", F::NavEngine.GetNavFilePath()));
+		if (auto pLocalArea = F::NavEngine.GetLocalNavArea())
+			DrawIndicatorText(p_draw_list, x, y += n_tall, t_ready_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Area ID: {}", pLocalArea->m_uId));
+		DrawIndicatorText(p_draw_list, x, y += n_tall, t_ready_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Total areas: {}", F::NavEngine.GetNavFile()->m_vAreas.size()));
+	}
+
+	if (F::NavEngine.IsPathing() || F::NavEngine.m_vLastDestination.Length() > 0.f)
+	{
+		const auto& v_dest = F::NavEngine.m_vLastDestination;
+		DrawIndicatorText(p_draw_list, x, y += n_tall, t_color, Vars::Menu::Theme::Background.Value, e_align, std::format("Dest: {:.0f}, {:.0f}, {:.0f}", v_dest.x, v_dest.y, v_dest.z));
+	}
+
+	const bool b_is_idle = F::NavEngine.m_eCurrentPriority == PriorityListEnum::None || !F::NavEngine.IsPathing();
+	DrawIndicatorText(
+		p_draw_list,
+		x,
+		y += n_tall,
+		b_is_idle ? Vars::Menu::Theme::Active.Value : Vars::Menu::Theme::Inactive.Value,
+		Vars::Menu::Theme::Background.Value,
+		e_align,
+		std::format("Idle: {} ({:.1f}s)", b_is_idle ? "Yes" : "No", std::max(0.f, fl_idle_time)));
+}
+
+void CNavBotCore::DrawDangerOverlay(CTFPlayer* pLocal)
+{
+	if (!pLocal || !(Vars::Menu::Indicators.Value & Vars::Menu::IndicatorsEnum::NavBot) || !pLocal->IsAlive() || !Vars::Debug::Info.Value)
+		return;
+
+	if (!Vars::Misc::Movement::NavBot::DangerOverlay.Value)
+		return;
+
+	int i_drawn = 0;
+	const float fl_max_dist = Vars::Misc::Movement::NavBot::DangerOverlayMaxDist.Value;
+	const float fl_max_dist_sqr = fl_max_dist * fl_max_dist;
+	for (const auto& [p_area, t_data] : F::Hazards.GetHazardMap())
+	{
+		if (!F::NavEngine.GetNavMap() || !F::NavEngine.GetNavMap()->IsAreaValid(p_area) || t_data.m_flCost <= 0.f)
+			continue;
+
+		if (p_area->m_vCenter.DistToSqr(pLocal->GetAbsOrigin()) > fl_max_dist_sqr)
+			continue;
+
+		Color_t t_overlay_color = Color_t(255, 200, 0, 80);
+		if (t_data.m_flCost >= HAZARD_COST_STICKY)
+			t_overlay_color = Color_t(255, 50, 50, 90);
+		else if (t_data.m_flCost >= HAZARD_COST_ENEMY_NORMAL)
+			t_overlay_color = Color_t(255, 140, 0, 90);
+
+		G::SphereStorage.push_back({ p_area->m_vCenter, 24.f, 10, 10, I::GlobalVars->curtime + I::GlobalVars->interval_per_tick * 2.f, t_overlay_color, Color_t(), true });
+
+		if (++i_drawn >= 64)
+			break;
+	}
 }

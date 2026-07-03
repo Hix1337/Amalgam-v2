@@ -171,7 +171,6 @@ public:
 NAMESPACE_BEGIN(Vars)
 	NAMESPACE_BEGIN(Config)
 		CVar(LoadDebugSettings, "Load debug settings", false);
-		CVar(AutoLoadCheaterConfig, "Auto load cheater config", false);
 		CVar(SteamWebAPIKey, "steamwebapi key", std::string(""), NOBIND);
 	NAMESPACE_END(Config)
 	
@@ -202,10 +201,10 @@ NAMESPACE_BEGIN(Vars)
 		CVar(CheapText, "Cheap text", false, NOBIND);
 
 		NAMESPACE_BEGIN(Theme)
-			CVar(Accent, "Accent color", Color_t(175, 150, 255, 255), VISUAL);
-			CVar(Background, "Background color", Color_t(0, 0, 0, 250), VISUAL);
-			CVar(Active, "Active color", Color_t(255, 255, 255, 255), VISUAL);
-			CVar(Inactive, "Inactive color", Color_t(150, 150, 150, 255), VISUAL);
+			CVar(Accent, "Accent color", Color_t(149, 139, 209, 255), VISUAL);
+			CVar(Background, "Background color", Color_t(31, 29, 53, 250), VISUAL);
+			CVar(Active, "Active color", Color_t(229, 226, 238, 255), VISUAL);
+			CVar(Inactive, "Inactive color", Color_t(159, 159, 219, 255), VISUAL);
 		NAMESPACE_END(Theme)
 	NAMESPACE_END(Menu)
 
@@ -474,7 +473,7 @@ NAMESPACE_BEGIN(Vars)
 			CVar(ActivateOnVoice, "Activate on voice", false);
 			CVar(ActivateFriendsOnly, "Activate friends only", false);
 			CVar(ActivationHealthPercent, "Activate at health", 0.f, SLIDER_MIN | SLIDER_PRECISION, 0.f, 100.f, 5.f, "%g%%");
-			CVar(AutoSwitchHealth, "Switch at", 75, SLIDER_CLAMP, 75, 200);
+			CVar(AutoSwitchHealth, "Switch at", 75, SLIDER_CLAMP, 1, 100, 1, "%i%%");
 
 			CVar(AutoVaccinatorBulletScale, "Auto vaccinator bullet scale", 100.f, NOSAVE | DEBUGVAR | SLIDER_MIN | SLIDER_PRECISION, 0.f, 200.f, 10.f, "%g%%");
 			CVar(AutoVaccinatorBlastScale, "Auto vaccinator blast scale", 100.f, NOSAVE | DEBUGVAR | SLIDER_MIN | SLIDER_PRECISION, 0.f, 200.f, 10.f, "%g%%");
@@ -754,7 +753,7 @@ NAMESPACE_BEGIN(Vars)
 			CVar(ForwardCutoff, "Forward cutoff", 0.1f, NOSAVE | DEBUGVAR | SLIDER_PRECISION, 0.f, 1.f, 0.1f);
 			CVar(Hull, "Hull", 0.f, NOSAVE | DEBUGVAR | SLIDER_MIN | SLIDER_PRECISION, 0.f, 10.f, 0.5f);
 			CVar(Speed, "Speed", 1100.f, NOSAVE | DEBUGVAR | SLIDER_MIN | SLIDER_PRECISION, 0.f, 5000.f, 50.f);
-			CVar(Gravity, "Gravity", 0.f, NOSAVE | DEBUGVAR | SLIDER_PRECISION, 0.f, 1.f, 0.1f);
+			CVar(Gravity, "Gravity", 0.f, NOSAVE | DEBUGVAR | SLIDER_PRECISION, 0.f, 800.f, 100.f);
 			CVar(LifeTime, "Life time", 10.f, NOSAVE | DEBUGVAR | SLIDER_MIN | SLIDER_PRECISION, 0.f, 10.f, 0.1f);
 			CVar(UpVelocity, "Up velocity", 0.f, NOSAVE | DEBUGVAR | SLIDER_PRECISION, 0.f, 1000.f, 50.f);
 			CVar(AngularVelocityX, "Angular velocity X", 0.f, NOSAVE | DEBUGVAR | SLIDER_PRECISION, -1000.f, 1000.f, 50.f);
@@ -891,6 +890,10 @@ I dont think this is a good idea to disable simulations completely:
 					VA_LIST("Teammates", "Enemies"),
 					Teammates = 1 << 0, Enemies = 1 << 1);
 
+				CVarEnum(Prefer, "Prefer", 0, NONE, nullptr,
+					VA_LIST("Off", "Prefer friends", "Party members"),
+					Off, PreferFriends, PartyMembers);
+
 				CVarEnum(LookAtPath, "Look at path", 0, NONE, nullptr,
 					VA_LIST("Off", "Plain", "Silent"),
 					Off, Plain, Silent);
@@ -934,7 +937,7 @@ I dont think this is a good idea to disable simulations completely:
 				VA_LIST("Off", "Retry", "Retry on death"),
 				Off, Retry, RetryOnDeath);
 			CVar(AutoRetry, "Auto retry", false);
-			CVar(AutoRetryHealth, "Retry below health", 35, SLIDER_CLAMP, 1, 450, 1, "%i HP");
+			CVar(AutoRetryHealth, "Retry below health", 35, SLIDER_CLAMP, 1, 100, 1, "%i%%");
 			CVar(TauntControl, "Taunt control", false);
 			CVar(KartControl, "Kart control", false);
 			CVar(AutoDisguise, "Auto disguise", false);
@@ -1147,7 +1150,6 @@ I dont think this is a good idea to disable simulations completely:
 			CVar(RandomClassInterval, "Random class interval", FloatRange_t(3.f, 5.f), SLIDER_MIN | SLIDER_PRECISION, 0.5f, 30.f, 0.5f, "%g - %gm");
 			CVar(ForceClass, "Autojoin class", 0);
 			CVar(JoinSpam, "Join spam", false);
-			CVar(AutoBanJoiner, "Auto-ban joiner", false);
 			CVar(Micspam, "Micspam", false);
 			CVar(NoiseSpam, "Noise spam", false);
 			CVar(CallVoteSpam, "Callvote spam", false);
@@ -1164,7 +1166,6 @@ I dont think this is a good idea to disable simulations completely:
 				CVar(TeamChat, "Team chat", false);
 				CVar(Randomize, "Randomize", false);
 				CVar(AutoReply, "Auto reply", false);
-				CVar(ChatRelay, "Chat relay", false);
 				CVar(VoteKickReply, "Vote kick reply", false);
 			NAMESPACE_END(ChatSpam)
 
@@ -1195,7 +1196,6 @@ I dont think this is a good idea to disable simulations completely:
 			CVar(CheatsBypass, "Cheats bypass", false);
 			CVar(UnlockCVars, "Unlock CVars", true);
 			CVar(EquipRegionUnlock, "Equip region unlock", false);
-			CVar(PremiumCraftingBypass, "Premium crafting bypass", false);
 			CVar(BreakShootSound, "Break shoot sound", false);
 			CVar(BackpackExpander, "Backpack expander", false);
 			CVar(PingReducer, "Ping reducer", false);
@@ -1286,8 +1286,11 @@ I dont think this is a good idea to disable simulations completely:
 			CVar(InstantRevive, "Instant revive", false);
 			CVar(AllowInspect, "Allow inspect", false);
 			CVar(AutoMvmReadyUp, "Auto MvM ready up", false);
+			CVar(AutoAbandonMannUp, "Auto abandon Mann Up", false);
 			CVar(BuyBot, "Buy Bot", false);
 			CVar(MaxCash, "Turn off buybot at cash", 15000, SLIDER_CLAMP | SLIDER_MIN, 0, 100000, 1000, "%i");
+			CVar(BuyBotAutoClass, "Buy Bot auto class", false);
+			CVar(BuyBotClass, "Buy Bot class", 6);
 		NAMESPACE_END(MannVsMachine)
 
 		NAMESPACE_BEGIN(Sound)
@@ -1308,7 +1311,8 @@ I dont think this is a good idea to disable simulations completely:
 		CVarEnum(NotificationPosition, "Notification position", 0, VISUAL, nullptr,
 			VA_LIST("Top left", "Top right", "Bottom left", "Bottom right"),
 			TopLeft, TopRight, BottomLeft, BottomRight);
-		CVar(Lifetime, "Notification time", 5.f, VISUAL, 0.5f, 5.f, 0.5f);
+		CVar(NotificationTime, "Notification time", 5.f, VISUAL, 0.5f, 5.f, 0.5f);
+		CVar(MaxNotifications, "Max notifications", 10, VISUAL | SLIDER_MIN, 1, 10);
 
 		NAMESPACE_BEGIN(VoteStart, Logging)
 			CVarValues(LogTo, "Vote start log to", 0b000001, DROPDOWN_MULTI, nullptr,

@@ -94,6 +94,7 @@ Enum(TriggerType, None,
 	 Ignite,
 	 Push,
 	 Regenerate,
+	 UpgradeStation,
 	 RespawnRoom,
 	 CaptureArea,
 	 Catapult,
@@ -174,11 +175,11 @@ namespace G
 	inline std::vector<TriggerData_t> TriggerStorage = {};
 	inline std::vector<PasstimeMapGoalData_t> PasstimeGoalStorage = {};
 
-	inline int SavedDefIndexes[3] = {-1,-1,-1};
-	inline int SavedWepIds[3] = {-1,-1,-1};
-	inline int SavedWepSlots[3] = {-1,-1,-1};
-	inline WeaponAmmoInfo_t AmmoInSlot[2] = {WeaponAmmoInfo_t(), WeaponAmmoInfo_t()};
-	
+	inline int SavedDefIndexes[SLOT_PDA2 + 1] = { -1,-1,-1,-1,-1 };
+	inline int SavedWepIds[SLOT_PDA2 + 1] = { -1,-1,-1,-1,-1 };
+	inline int SavedWepSlots[SLOT_PDA2 + 1] = { -1,-1,-1,-1,-1 };
+	inline WeaponAmmoInfo_t AmmoInSlot[SLOT_SECONDARY + 1] = { WeaponAmmoInfo_t(), WeaponAmmoInfo_t() };
+
 	inline int& RandomSeed()
 	{
 		static auto& pRandomSeed = *reinterpret_cast<int*>(U::Memory.RelToAbs(S::RandomSeed()));

@@ -17,39 +17,37 @@ float CMap::GetBlacklistPenalty(const BlacklistReason_t& tReason) const
 	}
 }
 
-namespace
+
+static float GetAreaVerticalOutside(const CNavArea& tArea, const Vector& vPos)
 {
-	float GetAreaVerticalOutside(const CNavArea& tArea, const Vector& vPos)
-	{
-		const float flBelow = std::max(tArea.m_flMinZ - vPos.z, 0.0f);
-		const float flAbove = std::max(vPos.z - tArea.m_flMaxZ, 0.0f);
-		return flBelow + flAbove;
-	}
+	const float flBelow = std::max(tArea.m_flMinZ - vPos.z, 0.0f);
+	const float flAbove = std::max(vPos.z - tArea.m_flMaxZ, 0.0f);
+	return flBelow + flAbove;
+}
 
-	float GetNearestAreaScore(const CNavArea& tArea, const Vector& vPos, bool bLocalOrigin, bool* pIsTightOverlap = nullptr)
-	{
-		const float flNearestX = std::clamp(vPos.x, tArea.m_vNwCorner.x, tArea.m_vSeCorner.x);
-		const float flNearestY = std::clamp(vPos.y, tArea.m_vNwCorner.y, tArea.m_vSeCorner.y);
-		const float flNearestZ = tArea.GetZ(flNearestX, flNearestY);
-		const float flVerticalToSurface = std::fabs(flNearestZ - vPos.z);
-		const float flVerticalOutside = GetAreaVerticalOutside(tArea, vPos);
+static float GetNearestAreaScore(const CNavArea& tArea, const Vector& vPos, bool bLocalOrigin, bool* pIsTightOverlap = nullptr)
+{
+	const float flNearestX = std::clamp(vPos.x, tArea.m_vNwCorner.x, tArea.m_vSeCorner.x);
+	const float flNearestY = std::clamp(vPos.y, tArea.m_vNwCorner.y, tArea.m_vSeCorner.y);
+	const float flNearestZ = tArea.GetZ(flNearestX, flNearestY);
+	const float flVerticalToSurface = std::fabs(flNearestZ - vPos.z);
+	const float flVerticalOutside = GetAreaVerticalOutside(tArea, vPos);
 
-		const float flDx = flNearestX - vPos.x;
-		const float flDy = flNearestY - vPos.y;
-		const float flPlanarDistSqr = flDx * flDx + flDy * flDy;
+	const float flDx = flNearestX - vPos.x;
+	const float flDy = flNearestY - vPos.y;
+	const float flPlanarDistSqr = flDx * flDx + flDy * flDy;
 
-		const bool bOverlapping = tArea.IsOverlapping(vPos);
-		const bool bTightOverlap = bOverlapping && flVerticalOutside <= 18.0f;
-		if (pIsTightOverlap) *pIsTightOverlap = bTightOverlap;
+	const bool bOverlapping = tArea.IsOverlapping(vPos);
+	const bool bTightOverlap = bOverlapping && flVerticalOutside <= 18.0f;
+	if (pIsTightOverlap) *pIsTightOverlap = bTightOverlap;
 
-		float flScore = flPlanarDistSqr + (flVerticalToSurface * flVerticalToSurface * 6.0f) + (flVerticalOutside * flVerticalOutside * (bLocalOrigin ? 18.0f : 10.0f));
-		if (bOverlapping) flScore *= bLocalOrigin ? 0.45f : 0.7f;
-		if (bTightOverlap) flScore *= 0.15f;
-		else if (bLocalOrigin && bOverlapping && flVerticalOutside > PLAYER_JUMP_HEIGHT)
-			flScore += flVerticalOutside * flVerticalOutside * 8.0f;
+	float flScore = flPlanarDistSqr + (flVerticalToSurface * flVerticalToSurface * 6.0f) + (flVerticalOutside * flVerticalOutside * (bLocalOrigin ? 18.0f : 10.0f));
+	if (bOverlapping) flScore *= bLocalOrigin ? 0.45f : 0.7f;
+	if (bTightOverlap) flScore *= 0.15f;
+	else if (bLocalOrigin && bOverlapping && flVerticalOutside > PLAYER_JUMP_HEIGHT)
+		flScore += flVerticalOutside * flVerticalOutside * 8.0f;
 
-		return flScore;
-	}
+	return flScore;
 }
 
 int CMap::Solve(CNavArea* pStart, CNavArea* pEnd, const SolveContext& tCtx, std::vector<CNavArea*>& vOutPath, float* pflCost)
@@ -76,7 +74,7 @@ int CMap::Solve(CNavArea* pStart, CNavArea* pEnd, const SolveContext& tCtx, std:
 		return 2;
 
 	m_bSkipSpawn = !(pStart->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE))
-				&& !(pEnd->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE));
+		&& !(pEnd->m_iTFAttributeFlags & (TF_NAV_SPAWN_ROOM_RED | TF_NAV_SPAWN_ROOM_BLUE));
 
 	PathNode_t& tStart = m_vPathNodes[uStartIdx];
 	tStart.m_g = 0.f;
@@ -165,10 +163,10 @@ SolveContext CMap::BuildSolveContext()
 {
 	SolveContext tCtx{};
 	auto pLocal = H::Entities.GetLocal();
-	tCtx.m_iTeam          = pLocal ? pLocal->m_iTeamNum() : 0;
-	tCtx.m_iTickcount     = I::GlobalVars ? I::GlobalVars->tickcount : 0;
+	tCtx.m_iTeam = pLocal ? pLocal->m_iTeamNum() : 0;
+	tCtx.m_iTickcount = I::GlobalVars ? I::GlobalVars->tickcount : 0;
 	tCtx.m_iVischeckCacheSeconds = std::min(Vars::Misc::Movement::NavEngine::VischeckCacheTime.Value, 45);
-	tCtx.m_bIgnoreTraces  = F::NavEngine.m_bIgnoreTraces;
+	tCtx.m_bIgnoreTraces = F::NavEngine.m_bIgnoreTraces;
 	F::Hazards.SnapshotCosts(tCtx.m_mHazardCosts);
 	return tCtx;
 }
@@ -178,16 +176,16 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::ve
 	if (!pCurrentArea) return;
 
 	const int iTeam = tCtx.m_iTeam;
-	const int iNow  = tCtx.m_iTickcount;
+	const int iNow = tCtx.m_iTickcount;
 	const float flTickInterval = I::GlobalVars ? I::GlobalVars->interval_per_tick : (1.0f / 66.f);
 	const int iCacheExpiry = iNow + static_cast<int>(static_cast<float>(tCtx.m_iVischeckCacheSeconds) / flTickInterval);
 	const int iUnreachableCacheExpiry = iNow + static_cast<int>(90.f / flTickInterval);
 
 	auto LookupHazard = [&](CNavArea* pArea) -> float
-	{
-		auto it = tCtx.m_mHazardCosts.find(pArea);
-		return it == tCtx.m_mHazardCosts.end() ? 0.f : it->second;
-	};
+		{
+			auto it = tCtx.m_mHazardCosts.find(pArea);
+			return it == tCtx.m_mHazardCosts.end() ? 0.f : it->second;
+		};
 
 	for (NavConnect_t& tConnection : pCurrentArea->m_vConnections)
 	{
@@ -268,20 +266,22 @@ void CMap::GetAdjacent(CNavArea* pCurrentArea, const SolveContext& tCtx, std::ve
 		if (!bPassable || !std::isfinite(flBaseCost) || flBaseCost <= 0.f)
 			continue;
 
-		float flFinalCost = std::max(tPoints.m_vCurrent.DistTo(tPoints.m_vNext), 1.f);
+		float flFinalCost = std::max(flBaseCost, 1.f);
 
 		if (!tCtx.m_bIgnoreTraces)
 		{
 			const float flHazardCost = LookupHazard(pNextArea);
 			if (std::isfinite(flHazardCost))
-				flFinalCost += std::clamp(flHazardCost * 0.2f, 0.f, 400.f);
+				flFinalCost += std::clamp(flHazardCost * 0.28f, 0.f, 650.f);
 			else
 				continue;
 
 			if (auto itStuck = m_mConnectionStuckTime.find(tKey); itStuck != m_mConnectionStuckTime.end())
 			{
 				if (itStuck->second.m_iExpireTick == 0 || itStuck->second.m_iExpireTick > iNow)
-					flFinalCost += std::clamp(static_cast<float>(itStuck->second.m_iTimeStuck) * 18.f, 12.f, 160.f);
+					flFinalCost += std::clamp(static_cast<float>(itStuck->second.m_iTimeStuck) * 120.f, 80.f, 800.f);
+				else
+					m_mConnectionStuckTime.erase(itStuck);
 			}
 		}
 		else
@@ -343,7 +343,7 @@ DropdownHint_t CMap::HandleDropdown(const Vector& vCurrentPos, const Vector& vNe
 		flAdvance = std::min(flAdvance, flHorizontalLength * 0.95f);
 		const float flMinAdvance = std::min(flHorizontalLength * 0.95f,
 			std::max(PLAYER_WIDTH * (bIsOneWay ? 0.5f : 0.75f),
-					 flHorizontalLength * (bIsOneWay ? 0.35f : 0.5f)));
+			flHorizontalLength * (bIsOneWay ? 0.35f : 0.5f)));
 		flAdvance = std::clamp(flAdvance, flMinAdvance, flHorizontalLength * 0.95f);
 
 		tHint.m_flApproachDistance = flAdvance;
@@ -387,24 +387,24 @@ bool CMap::HasDirectConnection(CNavArea* pFrom, CNavArea* pTo) const
 float CMap::EvaluateConnectionCost(CNavArea* pCurrentArea, CNavArea* pNextArea, const NavPoints_t& tPoints, const DropdownHint_t& tDropdown, int iTeam) const
 {
 	auto HorizontalDistance = [](const Vector& a, const Vector& b)
-	{
-		Vector d = b - a; d.z = 0.f; return d.Length();
-	};
+		{
+			Vector d = b - a; d.z = 0.f; return d.Length();
+		};
 
 	const float flForward = std::max(HorizontalDistance(tPoints.m_vCurrent, tPoints.m_vNext), 1.f);
 	const float flDeviationStart = HorizontalDistance(tPoints.m_vCurrent, tPoints.m_vCenter);
 	const float flDeviationEnd = HorizontalDistance(tPoints.m_vCenter, tPoints.m_vNext);
 	const float flHeightDiff = tPoints.m_vNext.z - tPoints.m_vCurrent.z;
 
-	float flCost = flForward + flDeviationStart * 0.3f + flDeviationEnd * 0.2f;
+	float flCost = flForward + flDeviationStart * 0.55f + flDeviationEnd * 0.35f;
 
-	if (flHeightDiff > 0.f)              flCost += flHeightDiff * 1.8f;
-	else if (flHeightDiff < -8.f)        flCost += std::abs(flHeightDiff) * 0.9f;
+	if (flHeightDiff > 0.f)              flCost += flHeightDiff * 2.6f;
+	else if (flHeightDiff < -8.f)        flCost += std::abs(flHeightDiff) * 1.15f;
 
 	if (tDropdown.m_bRequiresDrop)
-		flCost += tDropdown.m_flDropHeight * 2.2f + tDropdown.m_flApproachDistance * 0.45f;
+		flCost += tDropdown.m_flDropHeight * 3.25f + tDropdown.m_flApproachDistance * 0.7f;
 	else if (tDropdown.m_flApproachDistance > 0.f)
-		flCost += tDropdown.m_flApproachDistance * 0.25f;
+		flCost += tDropdown.m_flApproachDistance * 0.5f;
 
 	Vector vIn = tPoints.m_vCenter - tPoints.m_vCurrent;  vIn.z = 0.f;
 	Vector vOut = tPoints.m_vNext - tPoints.m_vCenter;    vOut.z = 0.f;
@@ -415,12 +415,15 @@ float CMap::EvaluateConnectionCost(CNavArea* pCurrentArea, CNavArea* pNextArea, 
 		vIn /= flLenIn;
 		vOut /= flLenOut;
 		const float flDot = std::clamp(vIn.Dot(vOut), -1.f, 1.f);
-		flCost += (1.f - flDot) * 30.f;
+		flCost += (1.f - flDot) * 65.f;
 	}
 
 	Vector vAreaExtent = pNextArea->m_vSeCorner - pNextArea->m_vNwCorner;
 	vAreaExtent.z = 0.f;
-	flCost -= std::clamp(vAreaExtent.Length() * 0.01f, 0.f, 12.f);
+	const float flNextAreaSize = vAreaExtent.Length();
+	flCost -= std::clamp(flNextAreaSize * 0.008f, 0.f, 8.f);
+	if (flNextAreaSize < PLAYER_WIDTH * 1.6f)
+		flCost += 75.f;
 
 	const bool bRedSpawn = pNextArea->m_iTFAttributeFlags & TF_NAV_SPAWN_ROOM_RED;
 	const bool bBlueSpawn = pNextArea->m_iTFAttributeFlags & TF_NAV_SPAWN_ROOM_BLUE;
@@ -433,7 +436,9 @@ float CMap::EvaluateConnectionCost(CNavArea* pCurrentArea, CNavArea* pNextArea, 
 	}
 
 	if (pNextArea->m_iAttributeFlags & NAV_MESH_AVOID)  flCost += 100000.f;
-	if (pNextArea->m_iAttributeFlags & NAV_MESH_CROUCH) flCost += flForward * 5.f;
+	if (pNextArea->m_iAttributeFlags & NAV_MESH_CROUCH) flCost += flForward * 7.f + 90.f;
+	if (pNextArea->m_iAttributeFlags & NAV_MESH_NO_JUMP) flCost += flHeightDiff > 8.f ? 420.f : 80.f;
+	if (pNextArea->m_iAttributeFlags & NAV_MESH_STAIRS) flCost += std::max(flHeightDiff, 0.f) * 0.6f;
 
 	const bool bHasReturnPath = HasDirectConnection(pNextArea, pCurrentArea);
 	int iForwardExitCount = 0;
@@ -445,17 +450,17 @@ float CMap::EvaluateConnectionCost(CNavArea* pCurrentArea, CNavArea* pNextArea, 
 	}
 
 	if (iForwardExitCount == 0)
-		flCost += bHasReturnPath ? 220.f : 900.f;
+		flCost += bHasReturnPath ? 340.f : 1300.f;
 	else if (iForwardExitCount == 1)
-		flCost += 90.f;
+		flCost += 150.f;
 
 	if (!bHasReturnPath)
 	{
-		flCost += 160.f;
+		flCost += 260.f;
 		if (tDropdown.m_bRequiresDrop)
-			flCost += std::clamp(tDropdown.m_flDropHeight * 3.0f, 120.f, 420.f);
+			flCost += std::clamp(tDropdown.m_flDropHeight * 4.5f, 180.f, 720.f);
 		if (pNextArea->m_iAttributeFlags & NAV_MESH_NO_JUMP)
-			flCost += 220.f;
+			flCost += 320.f;
 	}
 
 	return std::max(flCost, 1.f);

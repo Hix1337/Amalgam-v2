@@ -7,6 +7,24 @@
 #include "../../EnginePrediction/EnginePrediction.h"
 #include "../../NavBot/NavBotJobs/NavBotJobs.h"
 #include "../../Followbot/Followbot.h"
+#include "../AutoHeal/AutoHeal.h"
+
+inline int GetPriorityIdx(CTFWeaponBase* pWeapon)
+{
+	if (pWeapon->GetSlot() != SLOT_MELEE)
+	{
+		if (Vars::Aimbot::General::PrioritizeFollowbot.Value && pWeapon->GetWeaponID() == TF_WEAPON_MEDIGUN)
+			return F::FollowBot.m_tLockedTarget.m_iEntIndex;
+
+		if (F::AutoHeal.m_iAutoSwitch)
+			return F::AutoHeal.m_iTargetIdx;
+
+		if (Vars::Aimbot::General::PrioritizeNavbot.Value && F::NavBotStayNear.m_iStayNearTargetIdx)
+			return F::NavBotStayNear.m_iStayNearTargetIdx;
+	}
+
+	return -1;
+}
 
 std::vector<Target_t> CAimbotGlobal::ManageTargets(std::vector<Target_t>(*GetTargets)(CTFPlayer* pLocal, CTFWeaponBase* pWeapon), CTFPlayer* pLocal, CTFWeaponBase* pWeapon,
 	int iMethod, int iMaxTargets)
@@ -14,10 +32,7 @@ std::vector<Target_t> CAimbotGlobal::ManageTargets(std::vector<Target_t>(*GetTar
 	auto vTargets = GetTargets(pLocal, pWeapon);
 	SortTargetsPre(vTargets, iMethod);
 
-	// Prioritize navbot/followbot target
-	int iPriorityIdx = pWeapon->GetSlot() != SLOT_MELEE ? (pWeapon->GetWeaponID() == TF_WEAPON_MEDIGUN ?
-		(Vars::Aimbot::General::PrioritizeFollowbot.Value ? F::FollowBot.m_tLockedTarget.m_iEntIndex : -1) :
-		(Vars::Aimbot::General::PrioritizeNavbot.Value ? F::NavBotStayNear.m_iStayNearTargetIdx : -1)) : -1;
+	int iPriorityIdx = GetPriorityIdx(pWeapon);
 	if (iPriorityIdx > 0)
 	{
 		std::sort((vTargets).begin(), (vTargets).end(), [&](const Target_t& a, const Target_t& b) -> bool
@@ -240,7 +255,7 @@ bool CAimbotGlobal::ShouldIgnore(CBaseEntity* pEntity, CTFPlayer* pLocal, CTFWea
 
 	if (auto pGameRules = I::TFGameRules())
 	{
-		if (pGameRules->m_bTruceActive() && (FriendlyFire() || pLocal->m_iTeamNum() != pEntity->m_iTeamNum()))
+		if (pGameRules->m_bTruceActive() && (SDK::FriendlyFire() || pLocal->m_iTeamNum() != pEntity->m_iTeamNum()))
 			return true;
 	}
 
@@ -252,7 +267,7 @@ bool CAimbotGlobal::ShouldIgnore(CBaseEntity* pEntity, CTFPlayer* pLocal, CTFWea
 		if (pPlayer == pLocal || !pPlayer->IsAlive() || pPlayer->IsAGhost())
 			return true;
 
-		if (!FriendlyFire() && pLocal->m_iTeamNum() == pEntity->m_iTeamNum())
+		if (!SDK::FriendlyFire() && pLocal->m_iTeamNum() == pEntity->m_iTeamNum())
 			return false;
 
 #ifdef TEXTMODE
@@ -405,12 +420,6 @@ int CAimbotGlobal::GetPriority(int iIndex)
 	return iPriority;
 }
 
-bool CAimbotGlobal::FriendlyFire()
-{
-	static auto mp_friendlyfire = H::ConVars.FindVar("mp_friendlyfire");
-	return mp_friendlyfire->GetBool();
-}
-
 bool CAimbotGlobal::ShouldAim()
 {
 	switch (Vars::Aimbot::General::AimType.Value)
@@ -433,7 +442,9 @@ bool CAimbotGlobal::ShouldHoldAttack(CTFWeaponBase* pWeapon)
 			break;
 		[[fallthrough]];
 	case Vars::Aimbot::General::AimHoldsFireEnum::Always:
-		if (!F::Aimbot.m_bRunningSecondary && !G::CanPrimaryAttack && G::LastUserCmd->buttons & IN_ATTACK && Vars::Aimbot::General::AimType.Value && !pWeapon->IsInReload())
+		if (!(G::LastUserCmd->buttons & IN_ATTACK) || !Vars::Aimbot::General::AimType.Value || F::Aimbot.m_bRunningSecondary)
+			break;
+		if (!G::CanPrimaryAttack && !pWeapon->IsInReload() || pWeapon->GetWeaponID() == TF_WEAPON_GRAPPLINGHOOK && pWeapon->As<CTFGrapplingHook>()->m_hProjectile())
 			return true;
 	}
 	return false;
@@ -451,7 +462,7 @@ bool CAimbotGlobal::ValidBomb(CTFPlayer* pLocal, CTFWeaponBase* pWeapon, CBaseEn
 		sphere.NextEntity())
 	{
 		if (pEntity == pLocal || pEntity->IsPlayer() && (!pEntity->As<CTFPlayer>()->IsAlive() || pEntity->As<CTFPlayer>()->IsAGhost())
-			|| !FriendlyFire() && pEntity->m_iTeamNum() == pLocal->m_iTeamNum())
+			|| !SDK::FriendlyFire() && pEntity->m_iTeamNum() == pLocal->m_iTeamNum())
 			continue;
 
 		Vec3 vPos; pEntity->m_Collision()->CalcNearestPoint(vOrigin, &vPos);

@@ -8,6 +8,7 @@
 #include "../Aimbot/AutoRocketJump/AutoRocketJump.h"
 #include "../AntiCheatCompatibility/AntiCheatCompatibility.h"
 #include "../EnginePrediction/EnginePrediction.h"
+#include "../NavBot/NavEngine/NavEngine.h"
 #ifdef TEXTMODE
 #include "NamedPipe/NamedPipe.h"
 #endif
@@ -25,7 +26,6 @@ void CMisc::RunPre(CTFPlayer* pLocal, CUserCmd* pCmd)
 	JoinSpam(pLocal);
 	AchievementSpam(pLocal);
 	CallVoteSpam(pLocal);
-	AutoBanJoiner();
 	CheatsBypass();
 	WeaponSway();
 	AutoReport();
@@ -36,7 +36,7 @@ void CMisc::RunPre(CTFPlayer* pLocal, CUserCmd* pCmd)
 #endif
 	AntiAFK(pLocal, pCmd);
 	InstantRespawnMVM(pLocal);
-	ExecBuyBot(pLocal);
+	ExecBuyBot(pLocal, pCmd);
 
 	if (!pLocal->IsAlive() || pLocal->IsAGhost() || pLocal->m_MoveType() != MOVETYPE_WALK || pLocal->IsSwimming()
 		|| pLocal->IsTaunting() || pLocal->InCond(TF_COND_SHIELD_CHARGE))
@@ -89,14 +89,21 @@ void CMisc::AutoJump(CTFPlayer* pLocal, CUserCmd* pCmd)
 		return;
 
 	static bool bStaticAttempted = false, bStaticValid = false;
-	const bool bLastAttempted = bStaticAttempted, bLastValid = bStaticValid;
-	const bool bCurrAttempted = bStaticAttempted = G::OriginalCmd.buttons & IN_JUMP, bCurrValid = bStaticValid = pLocal->m_hGroundEntity() && !pLocal->IsDucking();
-	const bool bManual = !(SDK::AttribHookValue(0, "parachute_attribute", pLocal) && !pLocal->InCond(TF_COND_PARACHUTE_ACTIVE) && !(G::OriginalCmd.buttons & IN_DUCK)); // evil we don't want to manual
-
+	bool bLastAttempted = bStaticAttempted, bLastValid = bStaticValid;
+	bool bCurrAttempted = bStaticAttempted = G::OriginalCmd.buttons & IN_JUMP, bCurrValid = bStaticValid = pLocal->m_hGroundEntity() && !pLocal->IsDucking();
 	if (!bCurrValid || bCurrValid && G::LastUserCmd->buttons & IN_JUMP)
 		pCmd->buttons &= ~IN_JUMP;
-	if (bCurrAttempted && !bLastAttempted && bManual)
+
+	static float flLastAttempt = 0.f;
+	bool bPressed = bCurrAttempted && !bLastAttempted;
+	bool bParachute = SDK::AttribHookValue(0, "parachute_attribute", pLocal) && !pLocal->InCond(TF_COND_PARACHUTE_ACTIVE);
+	bool bAllow = !bParachute || G::OriginalCmd.buttons & IN_DUCK; // evil we don't want to manual
+	bool bManual = bAllow && (bPressed || bParachute && I::GlobalVars->curtime < flLastAttempt + 0.1f);
+	if (bPressed && !bCurrValid)
+		flLastAttempt = I::GlobalVars->curtime;
+	if (bManual)
 		pCmd->buttons |= IN_JUMP;
+
 	F::AntiCheatCompatibility.BunnyHop(pCmd, bCurrValid, bLastValid);
 }
 
@@ -732,60 +739,6 @@ void CMisc::JoinSpam(CTFPlayer* pLocal)
 	}
 
 	I::EngineClient->ClientCmd_Unrestricted(pLocal->m_iTeamNum() == TF_TEAM_RED ? "jointeam blue" : "jointeam red");
-}
-
-void CMisc::AutoBanJoiner()
-{
-	static bool bApplied = false, bRestore = false;
-	static auto sv_cheats = H::ConVars.FindVar("sv_cheats");
-	static auto fps_max = H::ConVars.FindVar("fps_max");
-	static auto host_timescale = H::ConVars.FindVar("host_timescale");
-
-	static float m_fOldFPSValue = 30.f;
-	static int m_nOldFPSValue = 30;
-	static int m_nOldCheatsValue = 1;
-
-	if (bRestore)
-	{
-		sv_cheats->m_nValue = m_nOldCheatsValue;
-		bRestore = false;
-	}
-
-	const bool bShouldApply = Vars::Misc::Automation::AutoBanJoiner.Value && I::EngineClient->IsDrawingLoadingImage();
-	if (bShouldApply)
-	{	
-		if (bApplied)
-			return;
-
-		// Save original fps_max values every time we run this
-		m_fOldFPSValue = fps_max->m_fValue;
-		m_nOldFPSValue = fps_max->m_nValue;
-
-		// Also save original sv_cheats
-		m_nOldCheatsValue = sv_cheats->m_nValue;
-		sv_cheats->m_nValue = 1;
-
-		fps_max->m_fValue = 0.3f;
-		fps_max->m_nValue = 0;
-		host_timescale->m_fValue = 40.f;
-		host_timescale->m_nValue = 40;
-
-		bApplied = true;
-		return;
-	}
-
-	if (!bApplied)
-		return;
-
-	sv_cheats->m_nValue = 1;
-
-	fps_max->m_fValue = m_fOldFPSValue;
-	fps_max->m_nValue = m_nOldFPSValue;
-	host_timescale->m_fValue = 1.f;
-	host_timescale->m_nValue = 1;
-
-	bRestore = true;
-	bApplied = false;
 }
 
 void CMisc::CallVoteSpam(CTFPlayer* pLocal)
@@ -1556,7 +1509,9 @@ void CMisc::AutoRetry(CTFPlayer* pLocal)
 	if (!Vars::Misc::Automation::AutoRetry.Value || !pLocal || !pLocal->IsAlive())
 		return;
 
-	if (pLocal->m_iHealth() >= Vars::Misc::Automation::AutoRetryHealth.Value)
+	const int max_health = pLocal->GetMaxHealth();
+	const float health_percent = max_health ? static_cast<float>(pLocal->m_iHealth()) / max_health * 100.f : 100.f;
+	if (health_percent >= Vars::Misc::Automation::AutoRetryHealth.Value)
 		return;
 
 	static Timer tRetryTimer{};
@@ -1713,12 +1668,8 @@ void CMisc::EnsureChatUtilsDoc()
 		"                     Triggers are matched case-insensitively as\n"
 		"                     substrings; one reply is chosen at random.\n"
 		"\n"
-		"  chat_relay.txt     Output-only log of every chat message seen\n"
-		"                     (server IP, map, name, message). Written by\n"
-		"                     the Chat Relay toggle. Do not hand-edit.\n"
-		"\n"
 		"----------------------------------------------------------------\n"
-		"  Tags (work in every file above except chat_relay)\n"
+		"  Tags\n"
 		"----------------------------------------------------------------\n"
 		"\n"
 		"  {killer}        Your in-game name (KillSay).\n"
@@ -1834,28 +1785,217 @@ void CMisc::AutoMvmReadyUp()
 		I::EngineClient->ClientCmd_Unrestricted("tournament_player_readystate 1");
 }
 
-void CMisc::ExecBuyBot(CTFPlayer* pLocal)
+void CMisc::BuyBotJoinClass(int iClass)
+{
+	static const std::array<const char*, 10> aClassNames = { "", "scout", "sniper", "soldier", "demoman", "medic", "heavyweapons", "pyro", "spy", "engineer" };
+	if (iClass <= TF_CLASS_UNDEFINED || iClass >= TF_CLASS_COUNT || iClass == TF_CLASS_CIVILIAN)
+		return;
+
+	float flCurTime = I::GlobalVars->curtime;
+	if (m_flBuybotClassClock > flCurTime)
+		return;
+
+	I::EngineClient->ClientCmd_Unrestricted(std::format("joinclass {}", aClassNames[iClass]).c_str());
+	I::EngineClient->ClientCmd_Unrestricted("menuclosed");
+	m_flBuybotClassClock = flCurTime + 1.0f;
+}
+
+bool CMisc::BuyBotWalkAwayFromStation(CTFPlayer* pLocal, CUserCmd* pCmd, const Vec3& vStation)
+{
+	if (!pLocal || !pCmd || vStation.IsZero())
+		return false;
+
+	if (m_bBuybotUsingNav)
+		F::NavEngine.CancelPath();
+
+	Vec3 vDirection = pLocal->GetAbsOrigin() - vStation;
+	vDirection.z = 0.0f;
+	if (vDirection.IsZero())
+		vDirection = { 1.0f, 0.0f, 0.0f };
+	vDirection.Normalize();
+
+	SDK::WalkTo(pCmd, pLocal, pLocal->GetAbsOrigin() + vDirection * 320.0f);
+	m_bBuybotUsingNav = false;
+	m_flBuybotStationPathStart = 0.0f;
+	return true;
+}
+
+void CMisc::ExecBuyBot(CTFPlayer* pLocal, CUserCmd* pCmd)
 {
 	if (!Vars::Misc::MannVsMachine::BuyBot.Value)
+	{
+		if (m_bBuybotUsingNav)
+			F::NavEngine.CancelPath();
+		ResetBuyBot();
 		return;
+	}
 
 	auto pGameRules = I::TFGameRules();
 	if (!pGameRules || !pGameRules->m_bPlayingMannVsMachine())
+	{
+		if (m_bBuybotUsingNav)
+			F::NavEngine.CancelPath();
+		ResetBuyBot();
 		return;
+	}
+
+	if (Vars::Misc::MannVsMachine::MaxCash.Value > 0 && pLocal->m_nCurrency() >= Vars::Misc::MannVsMachine::MaxCash.Value)
+		m_bBuybotCashLimitReached = true;
+
+	const Vec3 vLocalOrigin = pLocal->GetAbsOrigin();
+	bool bFoundStation = false;
+	float flBestDist = FLT_MAX;
+	Vec3 vBestStation = {};
+
+	for (const auto& tTrigger : G::TriggerStorage)
+	{
+		if (tTrigger.m_eType != TriggerTypeEnum::UpgradeStation)
+			continue;
+
+		Vec3 vStation = tTrigger.m_vCenter.IsZero() ? tTrigger.m_vOrigin : tTrigger.m_vCenter;
+		float flDist = vLocalOrigin.DistToSqr(vStation);
+		if (flDist >= flBestDist)
+			continue;
+
+		flBestDist = flDist;
+		vBestStation = vStation;
+		bFoundStation = true;
+	}
+
+	int iDesiredClass = 0;
+	if (Vars::Misc::MannVsMachine::BuyBotAutoClass.Value)
+	{
+		if (!m_bBuybotCashLimitReached)
+			iDesiredClass = TF_CLASS_MEDIC;
+		else if (pLocal->m_iClass() == TF_CLASS_MEDIC)
+		{
+			iDesiredClass = Vars::Misc::MannVsMachine::BuyBotClass.Value;
+			if (iDesiredClass == TF_CLASS_MEDIC)
+				iDesiredClass = TF_CLASS_HEAVY;
+		}
+	}
+
+	if (iDesiredClass > TF_CLASS_UNDEFINED && iDesiredClass < TF_CLASS_COUNT && pLocal->m_iClass() != iDesiredClass)
+	{
+		if (pLocal->m_bInUpgradeZone() && BuyBotWalkAwayFromStation(pLocal, pCmd, vBestStation))
+			return;
+
+		BuyBotJoinClass(iDesiredClass);
+		return;
+	}
+
+	const bool bWaitingForMedicClass = Vars::Misc::MannVsMachine::BuyBotAutoClass.Value && !m_bBuybotCashLimitReached && pLocal->m_iClass() != TF_CLASS_MEDIC;
+	if (m_bBuybotFinishedUpgrades)
+	{
+		if (m_bBuybotUsingNav)
+			F::NavEngine.CancelPath();
+		m_flBuybotStationPathStart = 0.0f;
+		m_bBuybotUsingNav = false;
+		return;
+	}
+
+	if (bFoundStation)
+	{
+		if (m_vBuybotStationTarget.IsZero() || m_vBuybotStationTarget.DistToSqr(vBestStation) > 4096.0f)
+		{
+			m_vBuybotStationTarget = vBestStation;
+			m_flBuybotStationPathStart = I::GlobalVars->curtime;
+			m_bBuybotUsingNav = false;
+		}
+
+		if (!pLocal->m_bInUpgradeZone() && pLocal->IsAlive() && !pLocal->IsAGhost() && pLocal->m_MoveType() == MOVETYPE_WALK && !pLocal->IsSwimming() && !pLocal->IsTaunting())
+		{
+			const float flCurTime = I::GlobalVars->curtime;
+			if (m_flBuybotStationPathStart == 0.0f)
+				m_flBuybotStationPathStart = flCurTime;
+
+			if (flCurTime - m_flBuybotStationPathStart >= 12.0f)
+			{
+				if (!m_bBuybotUsingNav || m_flBuybotNavClock <= flCurTime || m_vBuybotStationTarget.DistToSqr(vBestStation) > 4096.0f)
+				{
+					F::NavEngine.NavTo(vBestStation, PriorityListEnum::Forced, true, !F::NavEngine.IsPathing());
+					m_flBuybotNavClock = flCurTime + 0.5f;
+				}
+				m_bBuybotUsingNav = true;
+			}
+			else if (pCmd)
+				SDK::WalkTo(pCmd, pLocal, vBestStation);
+		}
+	}
+	else
+	{
+		m_flBuybotStationPathStart = 0.0f;
+		m_bBuybotUsingNav = false;
+		m_vBuybotStationTarget = {};
+	}
 
 	if (!pLocal->m_bInUpgradeZone())
 		return;
 
-	// cash threshold
-	if (Vars::Misc::MannVsMachine::MaxCash.Value > 0 && pLocal->m_nCurrency() >= Vars::Misc::MannVsMachine::MaxCash.Value)
-		return;
+	if (m_bBuybotUsingNav)
+		F::NavEngine.CancelPath();
+
+	m_flBuybotStationPathStart = 0.0f;
+	m_bBuybotUsingNav = false;
 
 	static auto tfMvmRespec = H::ConVars.FindVar("tf_mvm_respec_enabled");
-	if (tfMvmRespec->GetInt() != 1)
-		return;
-
 	float flCurTime = I::GlobalVars->curtime;
 	if (m_flBuybotClock > flCurTime)
+		return;
+
+	if (bWaitingForMedicClass)
+		return;
+
+	if (m_bBuybotCashLimitReached)
+	{
+		if (pLocal->m_iClass() == TF_CLASS_MEDIC)
+		{
+			m_flBuybotClock = flCurTime + 0.2f;
+			return;
+		}
+
+		constexpr int iMaxUpgradeIndex = 128;
+		constexpr int iMaxUpgradeLevels = 10;
+		const int aSlots[] = { 0, -1 };
+		const int iSlot = aSlots[m_iBuybotUpgradeSlotStep % std::size(aSlots)];
+
+		I::EngineClient->ServerCmdKeyValues(new KeyValues("MvM_UpgradesBegin"));
+		for (int iLevel = 0; iLevel < iMaxUpgradeLevels; iLevel++)
+		{
+			KeyValues* kv = new KeyValues("MVM_Upgrade");
+			KeyValues* sub = kv->FindKey("Upgrade", true);
+			sub->SetInt("itemslot", iSlot);
+			sub->SetInt("upgrade", m_iBuybotUpgradeIndex);
+			sub->SetInt("count", 1);
+			I::EngineClient->ServerCmdKeyValues(kv);
+		}
+		{
+			KeyValues* kv = new KeyValues("MvM_UpgradesDone");
+			kv->SetInt("num_upgrades", iMaxUpgradeLevels);
+			I::EngineClient->ServerCmdKeyValues(kv);
+		}
+
+		m_iBuybotUpgradeIndex++;
+		if (m_iBuybotUpgradeIndex >= iMaxUpgradeIndex)
+		{
+			m_iBuybotUpgradeIndex = 0;
+			m_iBuybotUpgradeSlotStep++;
+			if (m_iBuybotUpgradeSlotStep >= static_cast<int>(std::size(aSlots)))
+			{
+				m_bBuybotFinishedUpgrades = true;
+				m_bBuybotUsingNav = false;
+				m_vBuybotStationTarget = {};
+			}
+		}
+
+		m_flBuybotClock = flCurTime + 0.05f;
+		return;
+	}
+
+	m_iBuybotUpgradeSlotStep = 0;
+	m_iBuybotUpgradeIndex = 0;
+
+	if (tfMvmRespec->GetInt() != 1)
 		return;
 
 	switch (m_iBuybotStep)
@@ -1957,7 +2097,38 @@ void CMisc::ExecBuyBot(CTFPlayer* pLocal)
 void CMisc::ResetBuyBot()
 {
 	m_iBuybotStep = 1;
+	m_iBuybotUpgradeSlotStep = 0;
+	m_iBuybotUpgradeIndex = 0;
 	m_flBuybotClock = 0.0f;
+	m_flBuybotStationPathStart = 0.0f;
+	m_flBuybotNavClock = 0.0f;
+	m_flBuybotClassClock = 0.0f;
+	m_flBuybotRetryClock = 0.0f;
+	m_bBuybotUsingNav = false;
+	m_bBuybotCashLimitReached = false;
+	m_bBuybotFinishedUpgrades = false;
+	m_vBuybotStationTarget = {};
+}
+
+void CMisc::OnBuyBotClassChangeBlocked()
+{
+	if (!Vars::Misc::MannVsMachine::BuyBot.Value || !Vars::Misc::MannVsMachine::BuyBotAutoClass.Value)
+		return;
+
+	auto pGameRules = I::TFGameRules();
+	if (!pGameRules || !pGameRules->m_bPlayingMannVsMachine() || pGameRules->m_iRoundState() == GR_STATE_RND_RUNNING)
+		return;
+
+	auto pObjectiveResource = H::Entities.GetObjectiveResource();
+	if (pObjectiveResource && !pObjectiveResource->m_bMannVsMachineBetweenWaves() && pGameRules->m_iRoundState() != GR_STATE_BETWEEN_RNDS)
+		return;
+
+	const float flCurTime = I::GlobalVars->curtime;
+	if (m_flBuybotRetryClock > flCurTime)
+		return;
+
+	I::EngineClient->ClientCmd_Unrestricted("retry");
+	m_flBuybotRetryClock = flCurTime + 10.0f;
 }
 
 void CMisc::MicSpam()
@@ -2601,39 +2772,4 @@ void CMisc::OnChatMessage(int iEntIndex, const std::string& sName, const std::st
 		}
 	}
 
-	if (Vars::Misc::Automation::ChatSpam::ChatRelay.Value)
-	{
-		std::string sPath = F::Configs.m_sConfigPath + "chat_relay.txt";
-
-		std::string sServerIP = "";
-		if (auto pNetChan = I::EngineClient->GetNetChannelInfo())
-			sServerIP = pNetChan->GetAddress();
-
-		std::string sMapName = "";
-		if (const char* pMapName = I::EngineClient->GetLevelName())
-			sMapName = std::filesystem::path(pMapName).stem().string();
-
-		std::string sLogLine = std::format("[{}] [{}] {}: {}", sServerIP, sMapName, sName, sMsg);
-
-		{
-			std::ifstream file(sPath);
-			if (file.good())
-			{
-				file.seekg(0, std::ios::end);
-				std::streampos length = file.tellg();
-				if (length > 0)
-				{
-					int readSize = std::min((int)length, 4096);
-					file.seekg(-readSize, std::ios::end);
-					std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-					if (content.find(sLogLine) != std::string::npos)
-						return;
-				}
-			}
-		}
-
-		std::ofstream outfile(sPath, std::ios::app);
-		if (outfile.good())
-			outfile << sLogLine << std::endl;
-	}
 }

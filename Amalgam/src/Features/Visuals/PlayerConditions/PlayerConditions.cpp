@@ -1,8 +1,19 @@
 #include "PlayerConditions.h"
 
+#include "../../ImGui/IndicatorPanel.h"
+
 std::vector<std::string> CPlayerConditions::Get(CTFPlayer* pEntity)
 {
 	std::vector<std::string> vConditions = {};
+
+	if (pEntity->entindex() != I::EngineClient->GetLocalPlayer())
+	{
+		if (auto pWeapon = pEntity->m_hActiveWeapon()->As<CTFWeaponBase>())
+		{
+			bool bFlip = pEntity->m_bFlipViewModels();
+			vConditions.emplace_back(std::format("{}{}{}", bFlip ? "< " : "", SDK::ConvertWideToUTF8(pWeapon->GetWeaponName()), bFlip ? "" : " >"));
+		}
+	}
 
 	if (pEntity->InCond(TF_COND_INVULNERABLE) ||
 		pEntity->InCond(TF_COND_INVULNERABLE_HIDE_UNLESS_DAMAGED) ||
@@ -383,6 +394,7 @@ void CPlayerConditions::Draw(CTFPlayer* pLocal)
 	int y = Vars::Menu::ConditionsDisplay.Value.y + 8;
 	const auto& fFont = H::Fonts.GetFont(FONT_INDICATORS);
 	const int nTall = fFont.m_nTall + H::Draw.Scale(1);
+	ImDrawList* pDrawList = ImGui::GetForegroundDrawList();
 
 	EAlign align = ALIGN_TOP;
 	if (x <= 100 + H::Draw.Scale(50, Scale_Round))
@@ -401,7 +413,7 @@ void CPlayerConditions::Draw(CTFPlayer* pLocal)
 	int iOffset = 0;
 	for (const std::string& sCondition : vConditions)
 	{
-		H::Draw.StringOutlined(fFont, x, y + iOffset, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, sCondition.c_str());
+		DrawIndicatorText(pDrawList, x, y + iOffset, Vars::Menu::Theme::Active.Value, Vars::Menu::Theme::Background.Value, align, sCondition);
 		iOffset += nTall;
 	}
 }
