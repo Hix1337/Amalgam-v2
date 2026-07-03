@@ -23,10 +23,12 @@ void CMisc::RunPre(CTFPlayer* pLocal, CUserCmd* pCmd)
 	VoiceCommandSpam(pLocal);
 	ChatSpam(pLocal);
 	AutoDisguise(pLocal);
+	
 	JoinSpam(pLocal);
 	AchievementSpam(pLocal);
 	CallVoteSpam(pLocal);
 	CheatsBypass();
+	AutoBanJoiner();
 	WeaponSway();
 	AutoReport();
 	AutoRetry(pLocal);
