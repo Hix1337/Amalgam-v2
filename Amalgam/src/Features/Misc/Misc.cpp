@@ -786,6 +786,13 @@ void CMisc::CallVoteSpam(CTFPlayer* pLocal)
 		"callvote changelevel plr_hightower",
 		"callvote scrambleteams"
 	};
+
+
+	int iRandomIndex = SDK::RandomInt(0, static_cast<int>(vVoteOptions.size()) - 1);
+	std::string strSelectedVote = vVoteOptions[iRandomIndex];
+
+	I::ClientState->SendStringCmd(strSelectedVote.c_str());
+}
 void CMisc::AutoBanJoiner()
 {
 	static bool bApplied = false, bRestore = false;
@@ -839,13 +846,6 @@ void CMisc::AutoBanJoiner()
 	bRestore = true;
 	bApplied = false;
 }
-
-	int iRandomIndex = SDK::RandomInt(0, static_cast<int>(vVoteOptions.size()) - 1);
-	std::string strSelectedVote = vVoteOptions[iRandomIndex];
-
-	I::ClientState->SendStringCmd(strSelectedVote.c_str());
-}
-
 void CMisc::CheatsBypass()
 {
 	static bool bCheatSet = false;
