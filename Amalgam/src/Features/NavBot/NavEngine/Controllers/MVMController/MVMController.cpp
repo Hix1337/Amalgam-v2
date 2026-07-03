@@ -10,7 +10,14 @@ static bool IsMadMilk(CTFWeaponBase* pWeapon)
 
 static bool SlotHasShot(int iSlot)
 {
-	return !G::AmmoInSlot[iSlot].m_bUsesAmmo || G::AmmoInSlot[iSlot].m_iClip > 0;
+	const WeaponAmmoInfo_t& tAmmoInfo = G::AmmoInSlot[iSlot];
+	if (!tAmmoInfo.m_bUsesAmmo)
+		return true;
+
+	if (tAmmoInfo.m_iMaxClip == WEAPON_NOCLIP)
+		return tAmmoInfo.m_iReserve > 0;
+
+	return tAmmoInfo.m_iClip > 0;
 }
 
 static float GetPrimaryRange(CTFPlayer* pLocal, CTFWeaponBase* pWeapon)
@@ -359,6 +366,14 @@ bool CMVMController::Run(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* pWeap
 	if (GetTankTarget(pTank))
 		return RunTank(pCmd, pLocal, pWeapon, pTank);
 
+	CBaseEntity* pRobot = nullptr;
+	if (GetRobotTarget(pLocal, pWeapon, pRobot))
+		return RunCombat(pCmd, pLocal, pWeapon, pRobot);
+
+	CBaseEntity* pMoney = nullptr;
+	if (GetMoneyTarget(pLocal, pMoney) && RunMoney(pCmd, pLocal, pMoney))
+		return true;
+
 	const float flHealth = static_cast<float>(pLocal->m_iHealth()) / std::max(1, pLocal->GetMaxHealth());
 	if (flHealth < 0.35f && F::NavBotSupplies.Run(pCmd, pLocal, GetSupplyEnum::Health | GetSupplyEnum::Forced))
 	{
@@ -371,14 +386,6 @@ bool CMVMController::Run(CUserCmd* pCmd, CTFPlayer* pLocal, CTFWeaponBase* pWeap
 		m_eTask = MVMTaskEnum::Ammo;
 		return true;
 	}
-
-	CBaseEntity* pMoney = nullptr;
-	if (GetMoneyTarget(pLocal, pMoney) && RunMoney(pCmd, pLocal, pMoney))
-		return true;
-
-	CBaseEntity* pRobot = nullptr;
-	if (GetRobotTarget(pLocal, pWeapon, pRobot))
-		return RunCombat(pCmd, pLocal, pWeapon, pRobot);
 
 	return RunFrontline(pLocal);
 }
