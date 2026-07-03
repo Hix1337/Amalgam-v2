@@ -786,6 +786,59 @@ void CMisc::CallVoteSpam(CTFPlayer* pLocal)
 		"callvote changelevel plr_hightower",
 		"callvote scrambleteams"
 	};
+void CMisc::AutoBanJoiner()
+{
+	static bool bApplied = false, bRestore = false;
+	static auto sv_cheats = H::ConVars.FindVar("sv_cheats");
+	static auto fps_max = H::ConVars.FindVar("fps_max");
+	static auto host_timescale = H::ConVars.FindVar("host_timescale");
+
+	static float m_fOldFPSValue = 30.f;
+	static int m_nOldFPSValue = 30;
+	static int m_nOldCheatsValue = 1;
+
+	if (bRestore)
+	{
+		sv_cheats->m_nValue = m_nOldCheatsValue;
+		bRestore = false;
+	}
+
+	const bool bShouldApply = Vars::Misc::Automation::AutoBanJoiner.Value && I::EngineClient->IsDrawingLoadingImage();
+	if (bShouldApply)
+	{	
+		if (bApplied)
+			return;
+
+		// Save original fps_max values every time we run this
+		m_fOldFPSValue = fps_max->m_fValue;
+		m_nOldFPSValue = fps_max->m_nValue;
+
+		// Also save original sv_cheats
+		m_nOldCheatsValue = sv_cheats->m_nValue;
+		sv_cheats->m_nValue = 1;
+
+		fps_max->m_fValue = 0.3f;
+		fps_max->m_nValue = 0;
+		host_timescale->m_fValue = 40.f;
+		host_timescale->m_nValue = 40;
+
+		bApplied = true;
+		return;
+	}
+
+	if (!bApplied)
+		return;
+
+	sv_cheats->m_nValue = 1;
+
+	fps_max->m_fValue = m_fOldFPSValue;
+	fps_max->m_nValue = m_nOldFPSValue;
+	host_timescale->m_fValue = 1.f;
+	host_timescale->m_nValue = 1;
+
+	bRestore = true;
+	bApplied = false;
+}
 
 	int iRandomIndex = SDK::RandomInt(0, static_cast<int>(vVoteOptions.size()) - 1);
 	std::string strSelectedVote = vVoteOptions[iRandomIndex];
